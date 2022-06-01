@@ -1,0 +1,62 @@
+[
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG   -o CMakeFiles/vdo_slam.dir/example/vdo_slam.cc.o -c /home/hongfeng/code/VDO_SLAM/example/vdo_slam.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/example/vdo_slam.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/System.cc.o -c /home/hongfeng/code/VDO_SLAM/src/System.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/System.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/Tracking.cc.o -c /home/hongfeng/code/VDO_SLAM/src/Tracking.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/Tracking.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/ORBextractor.cc.o -c /home/hongfeng/code/VDO_SLAM/src/ORBextractor.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/ORBextractor.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/Converter.cc.o -c /home/hongfeng/code/VDO_SLAM/src/Converter.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/Converter.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/Map.cc.o -c /home/hongfeng/code/VDO_SLAM/src/Map.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/Map.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/Optimizer.cc.o -c /home/hongfeng/code/VDO_SLAM/src/Optimizer.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/Optimizer.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/Frame.cc.o -c /home/hongfeng/code/VDO_SLAM/src/Frame.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/Frame.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/cvplot/color.cc.o -c /home/hongfeng/code/VDO_SLAM/src/cvplot/color.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/cvplot/color.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/cvplot/figure.cc.o -c /home/hongfeng/code/VDO_SLAM/src/cvplot/figure.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/cvplot/figure.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/cvplot/highgui.cc.o -c /home/hongfeng/code/VDO_SLAM/src/cvplot/highgui.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/cvplot/highgui.cc"
+},
+{
+  "directory": "/home/hongfeng/code/VDO_SLAM/build",
+  "command": "/usr/bin/g++  -DCOMPILEDWITHC11 -DObjSLAM_EXPORTS -I/home/hongfeng/code/VDO_SLAM -I/home/hongfeng/code/VDO_SLAM/include -I/usr/include/eigen3 -I/usr/include/suitesparse -isystem /usr/local/include -isystem /usr/local/include/opencv   -Wall   -O3 -march=native -std=c++11 -O3 -DNDEBUG -fPIC   -o CMakeFiles/ObjSLAM.dir/src/cvplot/window.cc.o -c /home/hongfeng/code/VDO_SLAM/src/cvplot/window.cc",
+  "file": "/home/hongfeng/code/VDO_SLAM/src/cvplot/window.cc"
+}
+]

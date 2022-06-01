@@ -238,7 +238,7 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB, cv::Mat &imD, const cv::Ma
     mSegMap = maskSEM;
 
     // Initialize timing vector (Output)
-    // 存储5个处理时间：update_mask_time, cam_pos_time
+    // 存储5个处理时间：update_mask_time, cam_pos_time，obj_mot_time，map_upd_time
     all_timing.resize(5,0);
 
     // (new added Nov 21 2019)
@@ -1223,7 +1223,9 @@ void Tracking::Track()
     mState = OK;
 }
 
-
+//! initialization the slam system, initialize 3D point, map and frames
+//!
+//! return void
 void Tracking::Initialization()
 {
     cout << "Initialization ......" << endl;
@@ -3010,6 +3012,7 @@ void Tracking::UpdateMask()
 {
     cout << "Update Mask ......" << endl;
 
+    // 统计各个label的数量
     // find the unique labels in semantic label
     auto UniLab = mLastFrame.vSemObjLabel;
     std::sort(UniLab.begin(), UniLab.end());
