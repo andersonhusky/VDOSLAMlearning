@@ -972,6 +972,7 @@ void Tracking::Track()
             mCurrentFrame.vObjSpeed_gt[i] = sp_gt_norm;
 
             // // ***** calculate the estimated object speed *****
+            // 对应论文式子24
             cv::Mat sp_est_v;
             sp_est_v = mCurrentFrame.vObjMod[i].rowRange(0,3).col(3) - (cv::Mat::eye(3,3,CV_32F)-mCurrentFrame.vObjMod[i].rowRange(0,3).colRange(0,3))*ObjCentre3D_pre;
             float sp_est_norm = std::sqrt( sp_est_v.at<float>(0)*sp_est_v.at<float>(0) + sp_est_v.at<float>(1)*sp_est_v.at<float>(1) + sp_est_v.at<float>(2)*sp_est_v.at<float>(2) )*36;
@@ -995,7 +996,9 @@ void Tracking::Track()
 
             // (3) metric
             // cv::Mat H_p_c_body_est = L_w_p_inv*mCurrentFrame.vObjMod[i]*L_w_p;
+            // 对应论文式23
             cv::Mat H_p_c_body_est = L_w_p_inv*mCurrentFrame.vObjMod[i]*L_w_p;
+            // 和真值比较
             cv::Mat RePoEr = Converter::toInvMatrix(H_p_c_body_est)*H_p_c_body;
 
             // (4) metric
@@ -1184,6 +1187,7 @@ void Tracking::Track()
     // =================================================================================================
 
     bLocalBatch = true;
+    // 周期为nWINDOW_SIZE-nOVERLAP_SIZE，第一次局部优化为满足一个窗口大小的时候
     if ( (f_id-nOVERLAP_SIZE+1)%(nWINDOW_SIZE-nOVERLAP_SIZE)==0 && f_id>=nWINDOW_SIZE-1 && bLocalBatch)
     {
         cout << "-------------------------------------------" << endl;
@@ -1205,6 +1209,7 @@ void Tracking::Track()
     // =================================================================================================
 
     bGlobalBatch = true;
+    // 程序结束的时候运行
     if (f_id==StopFrame) // bFrame2Frame f_id>=2
     {
         // Metric Error BEFORE Optimization

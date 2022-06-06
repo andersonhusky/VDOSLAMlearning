@@ -39,6 +39,12 @@ namespace VDO_SLAM
 
 using namespace std;
 
+//! 局部优化函数，周期性运行一次
+//!
+//! \param pMap 地图
+//! \param Calib_K 内参
+//! \param WINDOW_SIZE 窗口大小
+//! \return 返回值
 void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const int WINDOW_SIZE)
 {
     const int N = pMap->vpFeatSta.size(); // Number of Frames
@@ -52,6 +58,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
     // label each feature of the position in TrackLets: -1(invalid) or >=0(TrackID);
     // size: static: (N)xM_1, M_1 is the size of features in each frame
     // size: dynamic: (N)xM_2, M_2 is the size of features in each frame
+    // 四个向量存储所有帧内的特征点是否可用，依据为是否连续track三帧以上
     std::vector<std::vector<int> > vnFeaLabSta(N),vnFeaMakSta(N),vnFeaLabDyn(N),vnFeaMakDyn(N);
     // initialize
     for (int i = 0; i < N; ++i)
