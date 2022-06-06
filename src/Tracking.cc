@@ -238,7 +238,7 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB, cv::Mat &imD, const cv::Ma
     mSegMap = maskSEM;
 
     // Initialize timing vector (Output)
-    // 存储5个处理时间：update_mask_time, cam_pos_time，obj_mot_time，map_upd_time
+    // 存储5个处理时间：update_mask_time, cam_pos_time，obj_tra_time，obj_mot_time，map_upd_time
     all_timing.resize(5,0);
 
     // (new added Nov 21 2019)
@@ -794,10 +794,12 @@ void Tracking::Track()
         cv::Mat Last_Twc_gt = Converter::toInvMatrix(mLastFrame.mTcw_gt);
         cv::Mat Curr_Twc_gt = Converter::toInvMatrix(mCurrentFrame.mTcw_gt);
         // main loop
+        // 遍历新的obj
         for (int i = 0; i < ObjIdNew.size(); ++i)
         {
             cout << endl << "Processing Object No.[" << mCurrentFrame.nModLabel[i] << "]:" << endl;
             // Get the ground truth object motion
+            // 存储上一帧和当前帧的object运动真值
             cv::Mat L_p, L_c, L_w_p, L_w_c, H_p_c, H_p_c_body;
             bool bCheckGT1 = false, bCheckGT2 = false;
             for (int k = 0; k < mLastFrame.nSemPosi_gt.size(); ++k)
@@ -840,6 +842,7 @@ void Tracking::Track()
                 }
             }
 
+            // 没有真值，跳过
             if (!bCheckGT1 || !bCheckGT2)
             {
                 cout << "Found a detected object with no ground truth motion! ! !" << endl;
@@ -865,7 +868,9 @@ void Tracking::Track()
 
             // ***************************************************************************************
 
+            // 存储上一帧object点云质心
             cv::Mat ObjCentre3D_pre = (cv::Mat_<float>(3,1) << 0.f, 0.f, 0.f);
+            // 遍历当前obj关键点，获取上一帧的深度
             for (int j = 0; j < ObjIdNew[i].size(); ++j)
             {
                 // save object centroid in current frame
@@ -880,6 +885,7 @@ void Tracking::Track()
             s_3_1 = clock();
 
             // ******* Get initial model and inlier set using P3P RanSac ********
+            // 当前object的点序号向量
             std::vector<int> ObjIdTest = ObjIdNew[i];
             mCurrentFrame.vnObjID[i] = ObjIdTest;
             std::vector<int> ObjIdTest_in;
@@ -939,7 +945,7 @@ void Tracking::Track()
             s_3_2 = clock();
             // // save object motion and label
             std::vector<int> InlierID;
-            if (bJoint)
+            if (bJoint && false)
             {
                 cv::Mat Obj_X_tmp = Optimizer::PoseOptimizationFlow2(&mCurrentFrame,&mLastFrame,ObjIdTest_in,InlierID);
                 mCurrentFrame.vObjMod[i] = Converter::toInvMatrix(mCurrentFrame.mTcw)*Obj_X_tmp;
@@ -1289,6 +1295,10 @@ void Tracking::Initialization()
     cout << "Initialization, Done!" << endl;
 }
 
+//! 计算场景流（object点云匹配此前已经完成）
+//!
+//! \param 无
+//! return 无返回值
 void Tracking::GetSceneFlowObj()
 {
     // // Threshold // //
@@ -1377,6 +1387,10 @@ void Tracking::GetSceneFlowObj()
     // cv::waitKey(0);
 }
 
+//! 动态物体帧间匹配，具体分为四步：label处理+边缘检测+运动、深度、大小检测+数量匹配
+//!
+//! \param 无
+//! return ObjIdNew 最终通过了检测的object的点向量
 std::vector<std::vector<int> > Tracking::DynObjTracking()
 {
     clock_t s_2, e_2;
@@ -1384,6 +1398,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
     s_2 = clock();
 
     // Find the unique labels in semantic label
+    // label处理：去重
     auto UniLab = mCurrentFrame.vSemObjLabel;
     std::sort(UniLab.begin(), UniLab.end());
     UniLab.erase(std::unique( UniLab.begin(), UniLab.end() ), UniLab.end() );
@@ -1394,6 +1409,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
     cout << endl;
 
     // Collect the predicted labels and semantic labels in vector
+    // 统计各个label的数量，并记录对应的点序号
     std::vector<std::vector<int> > Posi(UniLab.size());
     for (int i = 0; i < mCurrentFrame.vSemObjLabel.size(); ++i)
     {
@@ -1412,14 +1428,17 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
     }
 
     // // Save objects only from Posi() -> ObjId()
+    // 存放不在边缘的object id及其对应语义标签
     std::vector<std::vector<int> > ObjId;
     std::vector<int> sem_posi; // semantic label position for the objects
+    // 图像边缘阈值
     int shrin_thr_row=0, shrin_thr_col=0;
     if (mTestData==KITTI)
     {
         shrin_thr_row = 25;
         shrin_thr_col = 50;
     }
+    // 遍历label，再遍历对应label的特征点
     for (int i = 0; i < Posi.size(); ++i)
     {
         // shrink the image to get rid of object parts on the boundary
@@ -1428,9 +1447,11 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
         {
             const float u = mCurrentFrame.mvObjKeys[Posi[i][j]].pt.x;
             const float v = mCurrentFrame.mvObjKeys[Posi[i][j]].pt.y;
+            // 图像边缘检测
             if ( v<shrin_thr_row || v>(mImGray.rows-shrin_thr_row) || u<shrin_thr_col || u>(mImGray.cols-shrin_thr_col) )
                 count = count + 1;
         }
+        // 有效数量阈值检测
         if (count/Posi[i].size()>count_thres)
         {
             // cout << "Most part of this object is on the image boundary......" << endl;
@@ -1448,15 +1469,21 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
     // // Check scene flow distribution of each object and keep the dynamic object
     std::vector<std::vector<int> > ObjIdNew;
     std::vector<int> SemPosNew, obj_dis_tres(sem_posi.size(),0);
+    // 遍历不在边缘的动态物体，再遍历其内的点
     for (int i = 0; i < ObjId.size(); ++i)
     {
 
-        float obj_center_depth = 0, sf_min=100, sf_max=0, sf_mean=0, sf_count=0;
-        std::vector<int> sf_range(10,0);
+        float obj_center_depth = 0,         // object中点的深度累加(用于计算平均深度)
+        sf_min=100,                                         // 场景流最小运动
+        sf_max=0,                                           // 场景流最大运动
+        sf_mean=0,                                          // 场景流平均运动距离
+        sf_count=0;                                         // 运动程度小于阈值的数目
+        std::vector<int> sf_range(10,0);        // 将运动大小分为十个区域
         for (int j = 0; j < ObjId[i].size(); ++j)
         {
             obj_center_depth = obj_center_depth + mCurrentFrame.mvObjDepth[ObjId[i][j]];
             // const float sf_norm = cv::norm(mCurrentFrame.vFlow_3d[ObjId[i][j]]);
+            // 场景流2范数即距离
             float sf_norm = std::sqrt(mCurrentFrame.vFlow_3d[ObjId[i][j]].x*mCurrentFrame.vFlow_3d[ObjId[i][j]].x + mCurrentFrame.vFlow_3d[ObjId[i][j]].z*mCurrentFrame.vFlow_3d[ObjId[i][j]].z);
             if (sf_norm<fSFMgThres)
                 sf_count = sf_count+1;
@@ -1494,6 +1521,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
         //     cout << sf_range[j] << " ";
         // cout << endl;
 
+        // 运动较大点所占比例阈值检测，未通过的被标记为静态
         if (sf_count/ObjId[i].size()>fSFDsThres)
         {
             // label this object as static background
@@ -1501,6 +1529,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
                 mCurrentFrame.vObjLabel[ObjId[i][k]] = 0;
             continue;
         }
+        // 平均深度检测+数量检测（大小检测）
         else if (obj_center_depth/ObjId[i].size()>mThDepthObj || ObjId[i].size()<150)
         {
             obj_dis_tres[i]=-1;
@@ -1550,19 +1579,23 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
     // Relabel the objects that associate with the objects in last frame
 
     // initialize global object id
+    // 初始情况，max_id表示当前的object序号
     if (f_id==1)
         max_id = 1;
 
     // save current label id
     std::vector<int> LabId(ObjIdNew.size());
+    // 遍历当前帧的object，再遍历其特征点
     for (int i = 0; i < ObjIdNew.size(); ++i)
     {
         // save semantic labels in last frame
+        // 保存上一帧的label
         std::vector<int> Lb_last;
         for (int k = 0; k < ObjIdNew[i].size(); ++k)
             Lb_last.push_back(mLastFrame.vSemObjLabel[ObjIdNew[i][k]]);
 
         // find label that appears most in Lb_last()
+        // 对上一帧label计数并排序
         // (1) count duplicates
         std::map<int, int> dups;
         for(int k : Lb_last)
@@ -1576,6 +1609,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
         // label the object in current frame
         int New_lab = sorted[0].first;
         // cout << " what is in the new label: " << New_lab << endl;
+        // 初始情况，ObjIdNew中每个元素都创建为新的object
         if (max_id==1)
         {
             LabId[i] = max_id;
@@ -1586,6 +1620,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
         else
         {
             bool exist = false;
+            // 同上一帧匹配度最高的构成连接
             for (int k = 0; k < mLastFrame.nSemPosition.size(); ++k)
             {
                 if (mLastFrame.nSemPosition[k]==New_lab && mLastFrame.bObjStat[k])
@@ -1597,6 +1632,7 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
                     break;
                 }
             }
+            // 没找到匹配时新建object
             if (exist==false)
             {
                 LabId[i] = max_id;
@@ -1728,14 +1764,21 @@ cv::Mat Tracking::GetInitModelCam(const std::vector<int> &MatchId, std::vector<i
     return output;
 }
 
+//! 粗略计算object的初始运动情况
+//!
+//! \param ObjId object点序号
+//! \param ObjId_sub 内点情况
+//! \param objid object序号，处理当前帧的第几个obj
+//! \return output 估计的粗略位姿结果
 cv::Mat Tracking::GetInitModelObj(const std::vector<int> &ObjId, std::vector<int> &ObjId_sub, const int objid)
 {
     cv::Mat Mod = cv::Mat::eye(4,4,CV_32F);
     int N = ObjId.size();
 
     // construct input
-    std::vector<cv::Point2f> cur_2d(N);
-    std::vector<cv::Point3f> pre_3d(N);
+    // 根据输入的点序号构造输入
+    std::vector<cv::Point2f> cur_2d(N);                 // 2d坐标向量
+    std::vector<cv::Point3f> pre_3d(N);                 // 3d坐标向量
     for (int i = 0; i < N; ++i)
     {
         cv::Point2f tmp_2d;
@@ -1751,6 +1794,7 @@ cv::Mat Tracking::GetInitModelObj(const std::vector<int> &ObjId, std::vector<int
     }
 
     // camera matrix & distortion coefficients
+    // 相机内参
     cv::Mat camera_mat(3, 3, CV_64FC1);
     cv::Mat distCoeffs = cv::Mat::zeros(1, 4, CV_64FC1);
     camera_mat.at<double>(0, 0) = mK.at<float>(0,0);
@@ -1760,12 +1804,14 @@ cv::Mat Tracking::GetInitModelObj(const std::vector<int> &ObjId, std::vector<int
     camera_mat.at<double>(2, 2) = 1.0;
 
     // output
+    // 输出结果，角轴，平移矩阵，旋转向量，内点
     cv::Mat Rvec(3, 1, CV_64FC1);
     cv::Mat Tvec(3, 1, CV_64FC1);
     cv::Mat d(3, 3, CV_64FC1);
     cv::Mat inliers;
 
     // solve
+    // 通过PnP+Ransac求解
     int iter_num = 500;
     double reprojectionError = 0.4, confidence = 0.98; // 0.3 0.5 1.0
     cv::solvePnPRansac(pre_3d, cur_2d, camera_mat, distCoeffs, Rvec, Tvec, false,

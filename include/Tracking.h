@@ -189,6 +189,7 @@ public:
     int nMaxTrackPointBG, nMaxTrackPointOBJ;
 
     // Scene Flow Magnitude and Distribution Threshold
+    // ...，object运动阈值
     float fSFMgThres, fSFDsThres;
 
     // save timing values

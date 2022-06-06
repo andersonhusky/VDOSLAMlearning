@@ -150,6 +150,7 @@ public:
     std::vector<int> vObjLabel;
 
     // Store the 3D flow vector and the 2D re-projection error vector
+    // 3d场景流
     std::vector<cv::Point3f> vFlow_3d;
     std::vector<cv::Point2f> vFlow_2d;
 
@@ -157,8 +158,8 @@ public:
     std::vector<cv::Mat> vObjMod;
     std::vector<cv::Mat> vObjPosePre;
     std::vector<cv::Point2f> vSpeed;
-    std::vector<int> nModLabel;
-    std::vector<int> nSemPosition;
+    std::vector<int> nModLabel;                                 // 当前帧的label序号，即这是第几个object
+    std::vector<int> nSemPosition;                          // object的语义标签
     std::vector<int> vObjBoxID; // bounding box for each object
     std::vector<std::vector<int> > vnObjID; // object id in current frame
     std::vector<std::vector<int> > vnObjInlierID; // object id in current frame

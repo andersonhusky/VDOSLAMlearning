@@ -2541,6 +2541,13 @@ int Optimizer::PoseOptimizationFlow2Cam(Frame *pCurFrame, Frame *pLastFrame, vec
     return nInitialCorrespondences-nBad;
 }
 
+//! 函数功能
+//!
+//! \param pCurFrame 当前帧
+//! \param pLastFrame 上一帧
+//! \param ObjId GetInitModelObj计算时得到的内点
+//! \param InlierID 优化得到的内点
+//! \return pose 优化的位姿结果
 cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, const vector<int> &ObjId, std::vector<int> &InlierID)
 {
     float rp_thres = 0.01;
@@ -2556,6 +2563,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
     g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
 
+    // 边数量
     int nInitialCorrespondences=0;
 
     // Set MapPoint vertices
@@ -2563,6 +2571,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
 
     // ************************** preconditioning *****************************
     // (1) compute center location (in {o}) of the two point clouds of cur and pre frames.
+    // 计算当前帧和上一帧组成的object点云中心（两帧一起计算）
     cv::Mat NewCentre = (cv::Mat_<float>(3,1) << 0, 0, 0);
     for(int i=0; i<N; i++)
     {
@@ -2575,6 +2584,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
     }
 
     // (2) construct preconditioning coordinate ^{o}T_{p}
+    // 坐标系初始位置设为点云中心
     cv::Mat Twp = cv::Mat::eye(4,4,CV_32F);
     Twp.at<float>(0,3)=NewCentre.at<float>(0)/(2*N);
     Twp.at<float>(1,3)=NewCentre.at<float>(1)/(2*N);
@@ -2590,6 +2600,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
     // Set Frame vertex
     g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
     // cv::Mat Init = cv::Mat::eye(4,4,CV_32F); // initial with identity matrix
+    // 用当前帧的相机位姿（用静态点计算）和当前帧的object相机位姿（用object点计算）
     cv::Mat Init = Converter::toInvMatrix(pCurFrame->mTcw)*pCurFrame->mInitModel; // initial with identity matrix
     vSE3->setEstimate(Converter::toSE3Quat(Init));
     vSE3->setId(0);
@@ -2603,6 +2614,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
     vnIndexEdgeMono.reserve(N);
 
     // Set Projection Matrix
+    // 内参矩阵KK，投影矩阵PP
     Eigen::Matrix<double, 3, 4> KK, PP;
     KK << pCurFrame->fx, 0, pCurFrame->cx, 0, 0, pCurFrame->fy, pCurFrame->cy, 0, 0, 0, 1, 0;
     PP = KK*Converter::toMatrix4d(pCurFrame->mTcw); // *Converter::toMatrix4d(Twp)
@@ -2623,10 +2635,12 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
             nInitialCorrespondences++;
             vIsOutlier[i] = false;
 
+            // 观测真值
             Eigen::Matrix<double,2,1> obs;
             const cv::KeyPoint &kpUn = pCurFrame->mvObjKeys[ObjId[i]];
             obs << kpUn.pt.x, kpUn.pt.y;
 
+            // 自己定义的边
             g2o::EdgeSE3ProjectXYZOnlyObjMotion* e = new g2o::EdgeSE3ProjectXYZOnlyObjMotion();
 
             e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
@@ -2642,6 +2656,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
             // rk->setDelta(deltaMono);
 
             // add projection matrix
+            // 指定投影矩阵，点的世界坐标Xw
             e->P = PP;
 
             cv::Mat Xw = pLastFrame->UnprojectStereoObject(ObjId[i],0);
@@ -2652,6 +2667,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
             e->Xw[1] = Xw.at<float>(1);
             e->Xw[2] = Xw.at<float>(2);
 
+            // 添加边
             optimizer.addEdge(e);
 
             vpEdgesMono.push_back(e);
@@ -2667,11 +2683,13 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
 
     // We perform 4 optimizations, after each optimization we classify observation as inlier/outlier
     // At the next optimization, outliers are not included, but at the end they can be classified as inliers again.
+    // 第一个自定义的参数rp_thres设定得很小，可能是一开始要严格选择参与优化的边
     const float chi2Mono[4]={rp_thres,5.991,5.991,5.991}; // {5.991,5.991,5.991,5.991} {4,4,4,4}
     const int its[4]={200,100,100,100};
 
     int nBad=0;
     cout << endl;
+    // 这里应该是写错了，应该是4
     for(size_t it=0; it<1; it++)
     {
 
@@ -2683,6 +2701,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
 
         // monocular
         // cout << endl << "chi2: " << endl;
+        // 优化后遍历所有边，确定下一次参与优化的边的数量
         for(size_t i=0, iend=vpEdgesMono.size(); i<iend; i++)
         {
             g2o::EdgeSE3ProjectXYZOnlyObjMotion* e = vpEdgesMono[i];
@@ -2694,6 +2713,7 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
                 e->computeError();
             }
 
+            // 根据误差确定参与下一次优化的边
             const float chi2 = e->chi2();
 
             // if(chi2>chi2Mono[it])
@@ -2718,16 +2738,18 @@ cv::Mat Optimizer::PoseOptimizationObjMot(Frame *pCurFrame, Frame *pLastFrame, c
                 e->setLevel(0);
             }
 
+            // 两次迭代后取消核函数
             if(it==2)
                 e->setRobustKernel(0);
         }
 
-
         if(optimizer.edges().size()<5)
             break;
+
     }
 
     // Recover optimized pose and return number of inliers
+    // 取最终的位姿结果
     g2o::VertexSE3Expmap* vSE3_recov = static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(0));
     g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
     cv::Mat pose = Converter::toCvMat(SE3quat_recov);

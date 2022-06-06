@@ -481,6 +481,11 @@ cv::Mat Frame::UnprojectStereo(const int &i)
         return cv::Mat();
 }
 
+//! 恢复静态点的深度
+//!
+//! \param i 需要恢复的点序号
+//! \param addnoise 是否添加噪声标志位
+//! \return 点在世界坐标系下的坐标
 cv::Mat Frame::UnprojectStereoStat(const int &i, const bool &addnoise)
 {
     float z = mvStatDepth[i];
@@ -518,6 +523,11 @@ cv::Mat Frame::UnprojectStereoStat(const int &i, const bool &addnoise)
     }
 }
 
+//! 恢复object上点的深度
+//!
+//! \param i 需要恢复的点序号
+//! \param addnoise 是否添加噪声标志位
+//! \return 点在世界坐标系下的坐标
 cv::Mat Frame::UnprojectStereoObject(const int &i, const bool &addnoise)
 {
     float z = mvObjDepth[i];
