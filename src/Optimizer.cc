@@ -59,8 +59,11 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
     // size: static: (N)xM_1, M_1 is the size of features in each frame
     // size: dynamic: (N)xM_2, M_2 is the size of features in each frame
     // 四个向量存储所有帧内的特征点是否可用，依据为是否连续track三帧以上
+    // vnFeaLabSta和vnFeaLabDyn表示第几帧的第几个点属于第几条轨迹；
+    // vnFeaMakSta和vnFeaMakDyn表示第几帧的第几个点属于那一条相机-3D点观测边；
     std::vector<std::vector<int> > vnFeaLabSta(N),vnFeaMakSta(N),vnFeaLabDyn(N),vnFeaMakDyn(N);
     // initialize
+    // 全部初始化为-1
     for (int i = 0; i < N; ++i)
     {
         std::vector<int>  vnFLS_tmp(pMap->vpFeatSta[i].size(),-1);
@@ -74,6 +77,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         vnFeaMakDyn[i] = vnFLD_tmp;
     }
     int valid_sta = 0, valid_dyn = 0;
+    // 保存追踪长度>3的静/动态点信息
     // label static feature
     for (int i = 0; i < StaTracks.size(); ++i)
     {
@@ -100,6 +104,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
     }
 
     // save vertex ID in the graph
+    // 记录每帧的顶点序号
     std::vector<std::vector<int> > VertexID(N);
     // initialize
     for (int i = 0; i < N; ++i)
@@ -118,6 +123,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
 
     // check if objects has the required tracking length in current window
     const int ObjLength = WINDOW_SIZE-1;
+    // 记录各个label出现的长度是否足够
     std::vector<std::vector<bool> > ObjCheck(N-1);
     for (int i = 0; i < N-1; ++i)
     {
@@ -125,6 +131,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         ObjCheck[i] = ObjCheck_tmp;
     }
     // collect unique object label and how many times it appears
+    // 统计窗口内出现过的label和持续了多少帧
     std::vector<int> UniLab, LabCount;
     for (int i = N-WINDOW_SIZE; i < N-1; ++i)
     {
@@ -214,23 +221,35 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
     // ---------------------------------------------------------------------------------------
     // ---------=============!!!=- Main Loop for input data -=!!!=============----------------
     // ---------------------------------------------------------------------------------------
-    int count_unique_id = 1, FeaLengthThresSta = 3, FeaLengthThresDyn = 3, StaticStartFrame = N-WINDOW_SIZE;
-    bool ROBUST_KERNEL = true, ALTITUDE_CONSTRAINT = false, SMOOTH_CONSTRAINT = true, STATIC_ONLY = true;
+    int count_unique_id = 1,                                            // 顶点序号
+    FeaLengthThresSta = 3,                                              // 一个静态点需要的track长度
+    FeaLengthThresDyn = 3,                                              // 一个动态点需要的track长度
+    StaticStartFrame = N-WINDOW_SIZE;                   // 局部窗口帧起点
+
+    bool ROBUST_KERNEL = true,                                  // 是否启动核函数
+    ALTITUDE_CONSTRAINT = false,                            // 是否启动高度约束
+    SMOOTH_CONSTRAINT = true,                               // 是否启动平滑约束
+    STATIC_ONLY = true;                                                 // 是否只优化静态部分
     // float deltaHuberCamMot = 0.1, deltaHuberObjMot = 0.25, deltaHuber3D = 0.25;
+    // 鲁棒核函数参数
     float deltaHuberCamMot = 0.0001, deltaHuberObjMot = 0.0001, deltaHuber3D = 0.0001;
+    // 记录前后两帧的id用于构建边
     int PreFrameID, CurFrameID;
 
     // ===========================================================================
     // =================== FOR static points and camera poses ====================
     // ===========================================================================
+    // 窗口大小内的帧参与local optimization
     for (int i = StaticStartFrame; i < N; ++i)
     {
         // (1) save <VERTEX_POSE_R3_SO3>
+        // 第一类顶点，相机位姿
         g2o::VertexSE3 *v_se3 = new g2o::VertexSE3();
         v_se3->setId(count_unique_id);
         v_se3->setEstimate(Converter::toSE3Quat(pMap->vmCameraPose[i]));
         // v_se3->setEstimate(Converter::toSE3Quat(id_temp));
         optimizer.addVertex(v_se3);
+        // 添加第一条边的位姿先验边使其固定
         if (count_unique_id==1 && N==WINDOW_SIZE)
         {
             // cout << "the very first frame: " << N << " " << WINDOW_SIZE << endl;
@@ -248,12 +267,14 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         count_unique_id++;
 
         // ****** save camera motion if it is not the first frame ******
+        // 添加相机位姿之间构成的边
         if (i!=StaticStartFrame)
         {
             // (2) save <EDGE_R3_SO3>
             g2o::EdgeSE3 * ep = new g2o::EdgeSE3();
             ep->setVertex(0, optimizer.vertex(PreFrameID));
             ep->setVertex(1, optimizer.vertex(CurFrameID));
+            // 观测值是什么不太理解
             ep->setMeasurement(Converter::toSE3Quat(pMap->vmRigidMotion[i-1][0]));
             ep->information() = Eigen::MatrixXd::Identity(6, 6)/sigma2_cam;
             if (ROBUST_KERNEL)
@@ -268,6 +289,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         }
 
         // loop for static features
+        // 遍历当前帧的特征点信息（函数开始前统计的），选取有用的构成边
         for (int j = 0; j < vnFeaLabSta[i].size(); ++j)
         {
             // check feature validation
@@ -275,10 +297,12 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
                 continue;
 
             // get the TrackID of current feature
+            // 有用的特征点所在的Track
             int TrackID = vnFeaLabSta[i][j];
 
             // get the position of current feature in the tracklet
             int PositionID = -1;
+            // 遍历Track，确定当前特征点在track中哪个位置
             for (int k = 0; k < StaTracks[TrackID].size(); ++k)
             {
                 if (StaTracks[TrackID][k].first==i && StaTracks[TrackID][k].second==j)
@@ -294,6 +318,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
 
             // check if the PositionID is 0. Yes means this static point is first seen by this frame,
             // then save both the vertex and edge, otherwise save edge only because vertex is saved before.
+            // 如果是第一次看到，创建点+边
             if (PositionID==0)
             {
                 // check if this feature track has the same length as the window size
@@ -302,6 +327,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
                     continue;
 
                 // (3) save <VERTEX_POINT_3D>
+                // 添加3D顶点
                 g2o::VertexPointXYZ *v_p = new g2o::VertexPointXYZ();
                 v_p->setId(count_unique_id);
                 cv::Mat Xw = pMap->vp3DPointSta[i][j];
@@ -333,6 +359,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
             {
                 // check if this feature track has the same length as the window size
                 // or its previous FeaMakTmp is not -1, then save it, otherwise skip.
+                // 再检查一次
                 const int TrLength = StaTracks[TrackID].size();
                 const int FeaMakTmp = vnFeaMakSta[StaTracks[TrackID][PositionID-1].first][StaTracks[TrackID][PositionID-1].second];
                 if (TrLength<FeaLengthThresSta || FeaMakTmp==-1)
@@ -379,6 +406,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
             if (i==N-WINDOW_SIZE)
             {
                 // loop for dynamic features
+                // 遍历当前帧的动态特征点信息（函数开始前统计的），选取有用的构成边
                 for (int j = 0; j < vnFeaLabDyn[i].size(); ++j)
                 {
                     // check feature validation
@@ -386,10 +414,12 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
                         continue;
 
                     // get the TrackID of current feature
+                    // 有用的特征点所在的Track
                     int TrackID = vnFeaLabDyn[i][j];
 
                     // get the position of current feature in the tracklet
                     int PositionID = -1;
+                    // 遍历Track，确定当前特征点在track中哪个位置
                     for (int k = 0; k < DynTracks[TrackID].size(); ++k)
                     {
                         if (DynTracks[TrackID][k].first==i && DynTracks[TrackID][k].second==j)
@@ -404,6 +434,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
                     }
 
                     // check if this feature track has the same length as the window size
+                    // 检查该track中该特征点之后是否还有足够的个数
                     const int TrLength = DynTracks[TrackID].size();
                     if ( TrLength-PositionID<FeaLengthThresDyn )
                         continue;
@@ -438,6 +469,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
             else
             {
                 // loop for object motion, and keep the unique vertex id for saving object feature edges
+                // object对应的边
                 std::vector<int> ObjUniqueID(pMap->vmRigidMotion[i-1].size(),-1);
                 // (5) save <VERTEX_SE3Motion>
                 for (int j = 1; j < pMap->vmRigidMotion[i-1].size(); ++j)
@@ -447,12 +479,14 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
 
                     g2o::VertexSE3 *m_se3 = new g2o::VertexSE3();
                     m_se3->setId(count_unique_id);
+                    // 根据之前有无运动估计确定初值
                     if (pMap->vbObjStat[i-1][j])
                         m_se3->setEstimate(Converter::toSE3Quat(pMap->vmRigidMotion[i-1][j]));
                     else
                         m_se3->setEstimate(Converter::toSE3Quat(id_temp));
                     // m_se3->setEstimate(Converter::toSE3Quat(id_temp));
                     optimizer.addVertex(m_se3);
+                    // 是否考虑y方向误差
                     if (ALTITUDE_CONSTRAINT)
                     {
                         g2o::EdgeSE3Altitude * ea = new g2o::EdgeSE3Altitude();
@@ -463,10 +497,12 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
                         optimizer.addEdge(ea);
                         vpEdgeSE3Altitude.push_back(ea);
                     }
+                    // 和上一帧的位姿顶点构成速度平滑边
                     if (SMOOTH_CONSTRAINT && i>N-WINDOW_SIZE+2)
                     {
                         // trace back the previous id in vnRMLabel
                         int TraceID = -1;
+                        // 这里序号从0开始计，所以i-2对应上一帧，i-1对应当前
                         for (int k = 0; k < pMap->vnRMLabel[i-2].size(); ++k)
                         {
                             if (pMap->vnRMLabel[i-2][k]==pMap->vnRMLabel[i-1][j])
@@ -527,6 +563,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
                     }
 
                     // get the object position id of current feature
+                    // object所在边序号
                     int ObjPositionID = -1;
                     for (int k = 1; k < pMap->vnRMLabel[i-1].size(); ++k)
                     {
@@ -984,6 +1021,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         cout << "=================================================" << endl;
 
         cout << "CAMERA:" << endl;
+        // 计算旋转平移误差
         float t_sum = 0, r_sum = 0;
         for (int i = StaticStartFrame; i < N; ++i)
         {
@@ -1014,6 +1052,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         r_sum = r_sum/(N-StaticStartFrame);
         cout << "average error (Camera):" << " t: " << t_sum << " R: " << r_sum << endl;
 
+        // obj旋转平移误差
         if (STATIC_ONLY==false)
         {
             cout << "OBJECTS:" << endl;
@@ -1060,8 +1099,10 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
 
 
     // *** save optimized motion and pose results ***
+    // 优化之后更新信息
     cout << "UPDATE POSE and MOTION ......" << endl;
     // (1) camera
+    // 更新相机位姿
     for (int i = StaticStartFrame; i < N; ++i)
     {
         g2o::VertexSE3* vSE3 = static_cast<g2o::VertexSE3*>(optimizer.vertex(VertexID[i][0]));
@@ -1084,6 +1125,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         }
     }
     // (2) object
+    // 更新obj间位姿
     for (int i = N-WINDOW_SIZE; i < N; ++i)
     {
         for (int j = 1; j < VertexID[i].size(); ++j)
@@ -1113,6 +1155,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
     // *** save optimized 3d point results ***
     cout << "UPDATE 3D POINTS ......" << endl << endl;
     // (1) static points
+    // 更新静态点坐标
     for (int i = StaticStartFrame; i < N; ++i)
     {
         for (int j = 0; j < vnFeaMakSta[i].size(); ++j)
@@ -1129,6 +1172,7 @@ void Optimizer::PartialBatchOptimization(Map* pMap, const cv::Mat Calib_K, const
         }
     }
     // (2) dynamic points
+    // 更新动态点坐标
     for (int i = N-WINDOW_SIZE; i < N; ++i)
     {
         if (STATIC_ONLY==false)
@@ -1354,8 +1398,11 @@ void Optimizer::FullBatchOptimization(Map* pMap, const cv::Mat Calib_K)
     // ---------------------------------------------------------------------------------------
     // ---------=============!!!=- Main Loop for input data -=!!!=============----------------
     // ---------------------------------------------------------------------------------------
-    int count_unique_id = 1;
-    bool ROBUST_KERNEL = true, ALTITUDE_CONSTRAINT = false, SMOOTH_CONSTRAINT = true, STATIC_ONLY = false;
+    int count_unique_id = 1;                                                // 顶点序号
+    bool ROBUST_KERNEL = true,                                      // 是否使用核函数
+    ALTITUDE_CONSTRAINT = false,                                    // 是否启用高度约束（大概）
+    SMOOTH_CONSTRAINT = true,                                       // 是否启用平滑约束
+    STATIC_ONLY = false;                                                        // 是否只优化静态部分
     float deltaHuberCamMot = 0.0001, deltaHuberObjMot = 0.0001, deltaHuber3D = 0.0001;
     int PreFrameID;
     for (int i = 0; i < N; ++i)
@@ -3022,6 +3069,12 @@ cv::Mat Optimizer::Get3DinWorld(const cv::KeyPoint &Feats2d, const float &Dpts, 
     return mRwc*x3D+mtwc;
 }
 
+//! 从像素平面观测恢复出相机系下的3D坐标
+//!
+//! \param Feats2d 像素坐标
+//! \param Dpts 深度
+//! \param Calib_K 相机内参
+//! \return x3D 恢复的3D坐标
 cv::Mat Optimizer::Get3DinCamera(const cv::KeyPoint &Feats2d, const float &Dpts, const cv::Mat &Calib_K)
 {
     const float invfx = 1.0f/Calib_K.at<float>(0,0);
