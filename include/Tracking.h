@@ -148,6 +148,7 @@ public:
     // new added (Nov 14 2019)
     cv::Mat mFlowMap, mFlowMapLast;
     cv::Mat mDepthMap;
+    // 存储当前帧和上一针的mask信息
     cv::Mat mSegMap, mSegMapLast;
 
     // transfer the ground truth to use identity matrix as origin

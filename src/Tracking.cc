@@ -291,6 +291,7 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB, cv::Mat &imD, const cv::Ma
 
         // *** first assign current keypoints and depth to last frame
         // *** then assign last correspondences to current frame
+        // 带tmp名的存储当前帧的变量
         mvTmpObjKeys = mCurrentFrame.mvObjKeys;
         mvTmpObjDepth = mCurrentFrame.mvObjDepth;
         mvTmpSemObjLabel = mCurrentFrame.vSemObjLabel;
@@ -3059,11 +3060,12 @@ void Tracking::RenewFrameInfo(const std::vector<int> &TM_sta)
     cout << "Renew Frame Info, Done!" << endl;
 }
 
+// 不太清楚具体干了什么
 void Tracking::UpdateMask()
 {
     cout << "Update Mask ......" << endl;
 
-    // 统计各个label的数量
+    // 统计上一帧各个label的数量
     // find the unique labels in semantic label
     auto UniLab = mLastFrame.vSemObjLabel;
     std::sort(UniLab.begin(), UniLab.end());
@@ -3084,9 +3086,11 @@ void Tracking::UpdateMask()
     }
 
     // check each object label distribution in the coming frame
+    // 遍历label
     for (int i = 0; i < ObjID.size(); ++i)
     {
         // collect labels
+        // 存取当前label上的点和当前帧的匹配位置的mask信息
         std::vector<int> LabTmp;
         for (int j = 0; j < ObjID[i].size(); ++j)
         {
@@ -3102,6 +3106,7 @@ void Tracking::UpdateMask()
             continue;
 
         // find label that appears most in LabTmp()
+        // 统计出现最多的类别
         // (1) count duplicates
         std::map<int, int> dups;
         for(int k : LabTmp)

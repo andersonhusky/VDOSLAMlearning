@@ -35,15 +35,14 @@ int main(int argc, char **argv)
     }
 
     // Retrieve paths to images
-    // 名称：原图像，深度图像，分割图像，光流图像
-    vector<string> vstrFilenamesRGB;
-    vector<string> vstrFilenamesDEP;
-    vector<string> vstrFilenamesSEM;
-    vector<string> vstrFilenamesFLO;
+    vector<string> vstrFilenamesRGB;                            // 原图像.png文件向量
+    vector<string> vstrFilenamesDEP;                            // 深度图.png文件向量，单目由MonoDepth2网络给出
+    vector<string> vstrFilenamesSEM;                            // 语义分割结果的.txt文件向量，由maskrcnn网络给出
+    vector<string> vstrFilenamesFLO;                            // 光流.flow文件向量，由PWC-Net网络给出，用cv::optflow::readOpticalFlow()读取
     // 位姿真值，目标位姿真值，时间戳
-    std::vector<cv::Mat> vPoseGT;
-    vector<vector<float> > vObjPoseGT;
-    vector<double> vTimestamps;
+    std::vector<cv::Mat> vPoseGT;                                   // 相机真实位姿，前ni帧为需要的数据
+    vector<vector<float> > vObjPoseGT;                      // object真实位姿，十维，第一维表示在那一帧，前ni帧中的数据维需要的数据
+    vector<double> vTimestamps;                                 // 时间戳数据
 
     LoadData(argv[2], vstrFilenamesSEM, vstrFilenamesRGB, vstrFilenamesDEP, vstrFilenamesFLO,
                   vTimestamps, vPoseGT, vObjPoseGT);
@@ -52,6 +51,7 @@ int main(int argc, char **argv)
     vector<vector<int> > vObjPoseID(vstrFilenamesRGB.size());
     for (int i = 0; i < vObjPoseGT.size(); ++i)
     {
+        // 取object位姿所在帧，存储一帧内有那些object
         int f_id = vObjPoseGT[i][0];
         if (f_id>=vstrFilenamesRGB.size())
             break;
@@ -110,12 +110,15 @@ int main(int argc, char **argv)
 
         // // For stereo disparity input
         imD.convertTo(imD_f, CV_32F);
+        cv::imshow("Depth", imD);
+        cv::waitKey(1);
 
         // // For monocular depth input
         // cv::resize(imD, imD_r, cv::Size(1242,375));
         // imD_r.convertTo(imD_f, CV_32F);
 
         // Load flow matrix
+        // 光流存储的是上一帧到当前帧的光流
         cv::Mat imFlow = cv::optflow::readOpticalFlow(vstrFilenamesFLO[ni]);
         // FlowShow(imFlow);
 
@@ -154,6 +157,7 @@ void LoadData(const string &strPathToSequence, vector<string> &vstrFilenamesSEM,
               vector<double> &vTimestamps, vector<cv::Mat> &vPoseGT, vector<vector<float> > &vObjPoseGT)
 {
     // +++ timestamps +++
+    // 读取时间戳
     ifstream fTimes;
     string strPathTimeFile = strPathToSequence + "/times.txt";
     fTimes.open(strPathTimeFile.c_str());
@@ -173,6 +177,8 @@ void LoadData(const string &strPathToSequence, vector<string> &vstrFilenamesSEM,
     fTimes.close();
 
     // +++ image, depth, semantic and moving object tracking mask +++
+    // 读取图像，深度，语义，object mask数据
+    // mask从0开始貌似一个object对应一个数据
     string strPrefixImage = strPathToSequence + "/image_0/";         // image  image_0
     string strPrefixDepth = strPathToSequence + "/depth/";           // depth_gt  depth  depth_mono_stereo
     string strPrefixSemantic = strPathToSequence + "/semantic/";     // semantic_gt  semantic
@@ -197,6 +203,8 @@ void LoadData(const string &strPathToSequence, vector<string> &vstrFilenamesSEM,
 
 
     // +++ ground truth pose +++
+    // 相机真实位姿
+    // 测试数据中只有55帧但是位姿有143个，貌似前是55个对应真实相机位姿
     string strFilenamePose = strPathToSequence + "/pose_gt.txt"; //  pose_gt.txt  kevin_extrinsics.txt
     // vPoseGT.resize(nTimes);
     ifstream fPose;
@@ -226,6 +234,8 @@ void LoadData(const string &strPathToSequence, vector<string> &vstrFilenamesSEM,
 
 
     // +++ ground truth object pose +++
+    // object真实位姿
+    // 一个数据的维度为10维，第一个数据表示和哪个相机位姿对应，后面不知道是什么
     string strFilenameObjPose = strPathToSequence + "/object_pose.txt";
     ifstream fObjPose;
     fObjPose.open(strFilenameObjPose.c_str());
@@ -443,7 +453,7 @@ void LoadMask(const string &strFilenamesMask, cv::Mat &imMask)
         }
     }
 
-    // // Display the img_mask
+    // Display the img_mask
     // cv::imshow("Segmentation Mask", imgLabel);
     // cv::waitKey(1);
 

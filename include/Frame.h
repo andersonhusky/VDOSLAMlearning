@@ -128,15 +128,15 @@ public:
     std::vector<cv::KeyPoint> mvStatKeys, mvStatKeysRight;
 
     // Store dense key points and depths on objects
-    std::vector<cv::KeyPoint> mvObjKeys;
-    std::vector<float> mvObjDepth;
+    std::vector<cv::KeyPoint> mvObjKeys;                                                                // 当前帧obj特征点
+    std::vector<float> mvObjDepth;                                                                              // 当前帧obj上点深度
     std::vector<cv::Mat> mvObj3DPoint;
     // Correspondence for the objects
-    std::vector<cv::KeyPoint> mvObjCorres;
+    std::vector<cv::KeyPoint> mvObjCorres;                                                              // 当前帧特征点和下一帧的光流匹配
     // Optical flow for the objects
-    std::vector<cv::Point2f> mvObjFlowGT, mvObjFlowNext;
+    std::vector<cv::Point2f> mvObjFlowGT, mvObjFlowNext;                            // 当前帧特征点的光流值
     // semantic object label of all the foreground features
-    std::vector<int> vSemObjLabel;
+    std::vector<int> vSemObjLabel;                                                                              // 所有特征点的语义标签
 
     // save the object status (false for outlier, true for inlier)  # added 10 Jan 2020 #
     std::vector<bool> bObjStat;
