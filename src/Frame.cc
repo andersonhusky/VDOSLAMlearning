@@ -59,7 +59,7 @@ Frame::Frame(const Frame &frame)
 
 
 Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlow, const cv::Mat &maskSEM,
-    const double &timeStamp, ORBextractor* extractor,cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea)
+    const double &timeStamp, ORBextractor* extractor, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea)
     :mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
      mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth), mThDepthObj(thDepthObj)
 {
@@ -203,7 +203,6 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
     {
         for (int j = 0; j < imGray.cols; j=j+step)
         {
-
             // check ground truth motion mask
             if (maskSEM.at<int>(i,j)!=0 && imDepth.at<float>(i,j)<mThDepthObj && imDepth.at<float>(i,j)>0)
             {
@@ -259,6 +258,175 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
     cout << "Constructing Frame, Done!" << endl;
 }
 
+Frame::Frame(const cv::Mat &imGray, cv::Mat &imDepth, cv::Mat &imObjidx, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imObjPcl,const cv::Mat &imFlow, const cv::Mat &maskSEM,
+    const double &timeStamp, ORBextractor* extractor, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea)
+    :mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
+     mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth), mThDepthObj(thDepthObj)
+{
+
+    cout << "Start Constructing Frame......" << endl;
+
+    // Frame ID
+    mnId=nNextId++;
+
+    // Scale Level Info
+    mnScaleLevels = mpORBextractorLeft->GetLevels();
+    mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
+    mfLogScaleFactor = log(mfScaleFactor);
+    mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
+    mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
+    mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
+    mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
+
+
+    // ------------------------------------------------------------------------------------------
+    // ++++++++++++++++++++++++++++ New added for background features +++++++++++++++++++++++++++
+    // ------------------------------------------------------------------------------------------
+
+    // clock_t s_1, e_1;
+    // double fea_det_time;
+    // s_1 = clock();
+    // ORB extraction
+    ExtractORB(0,imGray);
+    // e_1 = clock();
+    // fea_det_time = (double)(e_1-s_1)/CLOCKS_PER_SEC*1000;
+    // cout << "feature detection time: " << fea_det_time << endl;
+
+    N = mvKeys.size();
+
+    if(mvKeys.empty())
+        return;
+
+    // static part
+    {
+        clock_t s_1, e_1;
+        double fea_det_time;
+        s_1 = clock();
+        std::vector<float> depthtmp;
+        std::vector<cv::KeyPoint> mvKeysSamp = SampleKeyPointsFromPC(imDepth, depthtmp, imObjPcl[0], imGray.rows, imGray.cols);
+        e_1 = clock();
+        fea_det_time = (double)(e_1-s_1)/CLOCKS_PER_SEC*1000;
+        std::cout << "feature detection time: " << fea_det_time << std::endl;
+
+        mvStatDepthTmp.reserve(depthtmp.size());
+        for (int i = 0; i < mvKeysSamp.size(); ++i)
+        {
+            int x = mvKeysSamp[i].pt.x;
+            int y = mvKeysSamp[i].pt.y;
+
+            if (maskSEM.at<int>(y,x)!=0)  // new added in Jun 13 2019
+                continue;
+
+            // change here
+            // if (imDepth.at<float>(y,x)>mThDepth || imDepth.at<float>(y,x)<=0)  // new added in Aug 21 2019
+            //     continue;
+
+            float flow_xe = imFlow.at<cv::Vec2f>(y,x)[0];
+            float flow_ye = imFlow.at<cv::Vec2f>(y,x)[1];
+
+            if(flow_xe!=0 && flow_ye!=0)
+            {
+                if(mvKeysSamp[i].pt.x+flow_xe < imGray.cols && mvKeysSamp[i].pt.y+flow_ye < imGray.rows && mvKeysSamp[i].pt.x+flow_xe>0 && mvKeysSamp[i].pt.y+flow_ye>0)
+                {
+                    mvStatKeysTmp.push_back(mvKeysSamp[i]);
+                    mvCorres.push_back(cv::KeyPoint(mvKeysSamp[i].pt.x+flow_xe,mvKeysSamp[i].pt.y+flow_ye,0,0,0,mvKeysSamp[i].octave,-1));
+                    mvFlowNext.push_back(cv::Point2f(flow_xe,flow_ye));
+                    if(depthtmp[i]>0){
+                        mvStatDepthTmp.push_back(depthtmp[i]);
+                    }
+                }
+            }
+        }
+        // cv::Mat img_show;
+        // cv::drawKeypoints(imGray, mvStatKeysTmp, img_show, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+        // cv::imshow("KeyPoints on Background", img_show);
+        // cv::waitKey(0);
+    }
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+
+    N_s_tmp = mvCorres.size();
+
+    // ---------------------------------------------------------------------------------------
+    // ++++++++++++++++++++++++++++ New added for dense object features ++++++++++++++++++++++
+    // ---------------------------------------------------------------------------------------
+
+    // semi-dense features on objects
+    {
+        for(int k=1; k<imObjPcl.size(); ++k){
+            std::cout << k << std::endl;
+            pcl::PointCloud<pcl::PointXYZ>::Ptr objPcl = imObjPcl[k];
+            cv::Mat X(3, 1, CV_32F);
+            cv::Mat X_(3, 1, CV_32F);
+            for(size_t i=0;  i<objPcl->points.size(); ++i){
+                X.at<float>(0, 0) = float(objPcl->points[i].x);
+                X.at<float>(1, 0) = float(objPcl->points[i].y);
+                X.at<float>(2, 0) = float(objPcl->points[i].z);
+                X_ = mK*X;
+
+                float d = X_.at<float>(2, 0);
+                if(d<=0)
+                    continue;
+                cv::Point pt;
+                pt.x = X_.at<float>(0, 0) / d;
+                pt.y = X_.at<float>(1, 0) / d;
+
+                int x = int(pt.x); 
+                int y = int(pt.y);
+                if(x<0 || x>=imGray.cols || y<0 || y>=imGray.rows)
+                    continue;
+                const float flow_x = imFlow.at<cv::Vec2f>(y, x)[0];
+                const float flow_y = imFlow.at<cv::Vec2f>(y, x)[1];
+
+                if(x+flow_x < imGray.cols && x+flow_x > 0 && y+flow_y < imGray.rows && y+flow_y > 0)
+                {
+                    mvObjFlowNext.push_back(cv::Point2f(flow_x,flow_y));
+                    mvObjCorres.push_back(cv::KeyPoint(x+flow_x,y+flow_y,0,0,0,-1));
+                    mvObjKeys.push_back(cv::KeyPoint(x,y,0,0,0,-1));
+                    mvObjDepth.push_back(d);
+                    vSemObjLabel.push_back(k);
+                    imDepth.at<float>(y,x) = d;
+                    imObjidx.at<ushort>(y,x) = k;
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+    // 特征点去畸变
+    UndistortKeyPoints();
+
+    // point：这里先不改，看后面ORB特征点干了啥
+    ComputeStereoFromRGBD(imDepth);
+
+    // This is done only for the first Frame (or after a change in the calibration)
+    // 第一帧才运行
+    if(mbInitialComputations)
+    {
+        // 划定图像边界
+        ComputeImageBounds(imGray);
+
+        mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
+        mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
+
+        fx = K.at<float>(0,0);
+        fy = K.at<float>(1,1);
+        cx = K.at<float>(0,2);
+        cy = K.at<float>(1,2);
+        invfx = 1.0f/fx;
+        invfy = 1.0f/fy;
+
+        mbInitialComputations=false;
+    }
+
+    mb = mbf/fx;
+
+    // 特征点分配到网格中
+    AssignFeaturesToGrid();
+
+    cout << "Constructing Frame, Done!" << endl;
+}
 
 void Frame::AssignFeaturesToGrid()
 {
@@ -486,6 +654,7 @@ cv::Mat Frame::UnprojectStereo(const int &i)
 //! \param i 需要恢复的点序号
 //! \param addnoise 是否添加噪声标志位
 //! \return 点在世界坐标系下的坐标
+// change here
 cv::Mat Frame::UnprojectStereoStat(const int &i, const bool &addnoise)
 {
     float z = mvStatDepth[i];
@@ -682,7 +851,6 @@ cv::Mat Frame::ObtainFlowDepthCamera(const int &i, const bool &addnoise)
 std::vector<cv::KeyPoint> Frame::SampleKeyPoints(const int &rows, const int &cols)
 {
     cv::RNG rng((unsigned)time(NULL));
-    // rows = 480, cols = 640.
     int N = 3000;
     int n_div = 20;
     std::vector<cv::KeyPoint> KeySave;
@@ -749,5 +917,65 @@ std::vector<cv::KeyPoint> Frame::SampleKeyPoints(const int &rows, const int &col
 
 }
 
+std::vector<cv::KeyPoint> Frame::SampleKeyPointsFromPC(cv::Mat &imDepth, std::vector<float> &depthtmp, const pcl::PointCloud<pcl::PointXYZ>::Ptr &staPcl, const int &rows, const int &cols)
+{
+    int N = 3000;
+    std::vector<cv::KeyPoint> KeySave;
+    KeySave.reserve(N);
+    depthtmp.reserve(N);
+
+    cv::RNG rng((unsigned)time(NULL));
+    int n_div = 20;
+    std::vector<std::vector<pair<cv::KeyPoint, float>>> KeyinGrid(n_div*n_div);
+    int x_step = cols/n_div, y_step = rows/n_div;
+
+    cv::Mat X(3, 1, CV_32F);
+    cv::Mat X_(3, 1, CV_32F);
+    for(size_t i=0;i<staPcl->points.size();++i){
+        X.at<float>(0, 0) = float(staPcl->points[i].x);
+        X.at<float>(1, 0) = float(staPcl->points[i].y);
+        X.at<float>(2, 0) = float(staPcl->points[i].z);
+        X_ = mK*X;
+
+        float d = X_.at<float>(2, 0);
+        if(d<=0)
+            continue;
+        cv::Point pt;
+        pt.x = X_.at<float>(0, 0) / d;
+        pt.y = X_.at<float>(1, 0) / d;
+
+        int x = int(pt.x); int y = int(pt.y);
+        if(x<0 || x>=cols || y<0 || y>=rows)
+            continue;
+
+        int idx_i = y/y_step, idx_j = x/x_step;
+        idx_i = idx_i>=n_div? n_div-1: idx_i;
+        idx_j = idx_j>=n_div? n_div-1: idx_j;
+        cv::KeyPoint Key_tmp = cv::KeyPoint(x,y,0,0,0,-1);
+        KeyinGrid[idx_i*n_div+idx_j].push_back(make_pair(Key_tmp, d));
+        imDepth.at<float>(y,x) = d;
+    }
+
+    int key_num = 0;
+    while(key_num<N){
+        int delta_num=0;
+        for (int i = 0; i < KeyinGrid.size(); ++i)
+        {
+            int len = KeyinGrid[i].size();
+            if(len==0) continue;
+            int j = rng.uniform(0, len);
+            KeySave.push_back(KeyinGrid[i][j].first);
+            depthtmp.push_back(KeyinGrid[i][j].second);
+            swap(KeyinGrid[i][j], KeyinGrid[i][len-1]);
+            KeyinGrid[i].pop_back();
+
+            ++key_num;
+            ++delta_num;
+            if (key_num>=N) break;
+        }
+        if(delta_num==0)    break;
+    }
+    return KeySave;
+}
 
 } //namespace VDO_SLAM

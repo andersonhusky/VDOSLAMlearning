@@ -14,6 +14,8 @@
 #include "ORBextractor.h"
 
 #include <opencv2/opencv.hpp>
+#include <pcl/point_types.h>                                        //PCL对各种格式的点的支持头文件
+#include <pcl/io/pcd_io.h>                                              //PCL的PCD格式文件的输入输出头文件
 
 namespace VDO_SLAM
 {
@@ -34,6 +36,8 @@ public:
     // Constructor for RGB-D cameras.
     Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlow, const cv::Mat &maskSEM, const double &timeStamp, ORBextractor* extractor,
           cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea);
+    Frame(const cv::Mat &imGray, cv::Mat &imDepth, cv::Mat &imObjidx, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imObjPcl, const cv::Mat &imFlow, const cv::Mat &maskSEM,
+          const double &timeStamp, ORBextractor* extractor, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea);
 
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractORB(int flag, const cv::Mat &im);
@@ -72,6 +76,7 @@ public:
     cv::Mat ObtainFlowDepthCamera(const int &i, const bool &addnoise);
 
     std::vector<cv::KeyPoint> SampleKeyPoints(const int &rows, const int &cols);
+    std::vector<cv::KeyPoint> SampleKeyPointsFromPC(cv::Mat &imDepth, std::vector<float> &depthtmp, const pcl::PointCloud<pcl::PointXYZ>::Ptr &staPcl, const int &rows, const int &cols);
 
 public:
 
@@ -125,18 +130,14 @@ public:
     int N_s;
 
     // Store keypoints and descriptors
-    std::vector<cv::KeyPoint> mvStatKeys, mvStatKeysRight;
-
+    std::vector<cv::KeyPoint> mvStatKeys, mvStatKeysRight;                          // 静态特征点，在tracking中存储的是光流的tmp结果
     // Store dense key points and depths on objects
     std::vector<cv::KeyPoint> mvObjKeys;                                                                // 当前帧obj特征点
     std::vector<float> mvObjDepth;                                                                              // 当前帧obj上点深度
     std::vector<cv::Mat> mvObj3DPoint;
-    // Correspondence for the objects
-    std::vector<cv::KeyPoint> mvObjCorres;                                                              // 当前帧特征点和下一帧的光流匹配
-    // Optical flow for the objects
-    std::vector<cv::Point2f> mvObjFlowGT, mvObjFlowNext;                            // 当前帧特征点的光流值
-    // semantic object label of all the foreground features
-    std::vector<int> vSemObjLabel;                                                                              // 所有特征点的语义标签
+    std::vector<cv::KeyPoint> mvObjCorres;                                                              // obj当前帧特征点对应光流结果的下一帧位置
+    std::vector<cv::Point2f> mvObjFlowGT, mvObjFlowNext;                            // FlowNext：当前帧特征点的光流向量
+    std::vector<int> vSemObjLabel;                                                                              // obj特征点的语义标签，来自mask结果
 
     // save the object status (false for outlier, true for inlier)  # added 10 Jan 2020 #
     std::vector<bool> bObjStat;
@@ -157,7 +158,7 @@ public:
     // Store the motion of objects
     std::vector<cv::Mat> vObjMod;
     std::vector<cv::Mat> vObjPosePre;
-    std::vector<cv::Point2f> vSpeed;
+    std::vector<cv::Point2f> vSpeed;                        // 对应object的运动速度
     std::vector<int> nModLabel;                                 // 当前帧的label序号，即这是第几个object
     std::vector<int> nSemPosition;                          // object的语义标签
     std::vector<int> vObjBoxID; // bounding box for each object
@@ -169,17 +170,17 @@ public:
     // for initializing motion
     cv::Mat mInitModel;
 
-    std::vector<cv::KeyPoint> mvCorres; // correspondence
-    std::vector<cv::Point2f> mvFlow,mvFlowNext; // optical flow
+    std::vector<cv::KeyPoint> mvCorres;                                                                     // 当前帧静态点对应光流结果的下一帧位置
+    std::vector<cv::Point2f> mvFlow,mvFlowNext;                                                 // flownext：当前帧特征点对应的光流向量
     // std::vector<int> vCorSta; // the status of correspondence, -1 (outliers) 1 (has correspondence)
 
     // temporal saved
-    std::vector<cv::KeyPoint> mvStatKeysTmp;
-    std::vector<float> mvStatDepthTmp;
-    std::vector<cv::Mat> mvStat3DPointTmp;
+    std::vector<cv::KeyPoint> mvStatKeysTmp;                                                        // 存储Frame初始化时构建的静态ORB特征点
+    std::vector<float> mvStatDepthTmp;                                                                      // 存储Frame初始化时静态特征点对应的深度值
+    std::vector<cv::Mat> mvStat3DPointTmp;                                                          // 通过特征点和深度构造的3D静态点
     std::vector<int> vSemLabelTmp;
     std::vector<int> vObjLabel_gtTmp;
-    int N_s_tmp;
+    int N_s_tmp;                                                                        // 一开始生成的特征点的数目
 
     // inlier ID generated in this frame  (new added Nov 14 2019)
     std::vector<int> nStaInlierID;
@@ -188,8 +189,8 @@ public:
 
     // **************** Ground Truth *********************
 
-    std::vector<cv::Mat> vObjPose_gt;
-    std::vector<int> nSemPosi_gt;
+    std::vector<cv::Mat> vObjPose_gt;                                               // 当前帧出现的obj对应的位姿真值
+    std::vector<int> nSemPosi_gt;                                                       // 当前帧出现的obj序号
     std::vector<cv::Mat> vObjMod_gt;
     std::vector<float> vObjSpeed_gt;
 

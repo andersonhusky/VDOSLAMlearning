@@ -13,6 +13,8 @@
 #include<string>
 #include<thread>
 #include<opencv2/core/core.hpp>
+#include <pcl/point_types.h>                                        //PCL对各种格式的点的支持头文件
+#include <pcl/io/pcd_io.h>                                              //PCL的PCD格式文件的输入输出头文件
 
 #include "Tracking.h"
 #include "Map.h"
@@ -49,6 +51,10 @@ public:
     cv::Mat TrackRGBD(const cv::Mat &im, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
                       const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, const double &timestamp,
                       cv::Mat &imTraj, const int &nImage);
+
+    cv::Mat TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
+                    const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, 
+                    const double &timestamp, cv::Mat &imTraj, const int &nImage);
 
     void SaveResults(const string &filename);
 

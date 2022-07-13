@@ -12,6 +12,8 @@
 
 #include<opencv2/core/core.hpp>
 #include<opencv2/features2d/features2d.hpp>
+#include <pcl/point_types.h>                                        //PCL对各种格式的点的支持头文件
+#include <pcl/io/pcd_io.h>                                              //PCL的PCD格式文件的输入输出头文件
 
 // eigen
 #include <Eigen/Core>
@@ -67,6 +69,10 @@ public:
                           const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, const double &timestamp,
                           cv::Mat &imTraj, const int &nImage);
 
+    cv::Mat GrabImageRGBD(const cv::Mat &imRGB, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, cv::Mat &imD, const cv::Mat &imFlow,
+                                const cv::Mat &maskSEM, const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt,
+                                const double &timestamp, cv::Mat &imTraj, const int &nImage);
+
     // Sparse Scene Flow Vector
     void GetSceneFlowObj();
 
@@ -112,6 +118,9 @@ public:
 
     void UpdateMask();
 
+    float DepthInterpolation(const cv::Mat &maskSEM, const cv::Mat &imDepth, const int &row, const int &col);
+    cv::Point2f GetCrossPoint(cv::Vec4i LineA, cv::Vec4i LineB);
+    int GetObjectIdx(const cv::Mat &imObjidx, const int &row, const int &col);
 
 public:
 
@@ -155,10 +164,11 @@ public:
     cv::Mat mOriginInv;
 
     // Store temperal matching feature index
-    bool bFrame2Frame,bFirstFrame;  // ++++++ new added
-    std::vector<int> TemperalMatch, TemperalMatch_subset;  // ++++++ new added
+    bool bFrame2Frame,bFirstFrame;                                                                              // 是否是帧到帧，是否有第一帧++++++ new added
+    std::vector<int> TemperalMatch, TemperalMatch_subset;                              // 存储光流的结果，++++++ new added
     std::vector<cv::KeyPoint> mvKeysLastFrame, mvKeysCurrentFrame;  // ++++++ new added
 
+    // 带tmp的变量存储来自Frame初始化的obj信息
     std::vector<cv::KeyPoint> mvTmpObjKeys;
     std::vector<float> mvTmpObjDepth;
     std::vector<int> mvTmpSemObjLabel;
@@ -238,7 +248,7 @@ protected:
     Frame mLastFrame;
 
     //Motion Model
-    cv::Mat mVelocity;
+    cv::Mat mVelocity;                                                          // 运动速度模型
 
     //Color order (true RGB, false BGR, ignored if grayscale)
     bool mbRGB;

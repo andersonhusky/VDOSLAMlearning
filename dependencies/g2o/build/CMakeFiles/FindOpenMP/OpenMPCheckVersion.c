@@ -13,4 +13,5 @@ const char ompver_str[] = { 'I', 'N', 'F', 'O', ':', 'O', 'p', 'e', 'n', 'M',
 int main()
 {
   puts(ompver_str);
+  return 0;
 }

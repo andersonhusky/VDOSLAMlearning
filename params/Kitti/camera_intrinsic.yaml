@@ -1,0 +1,9 @@
+%YAML:1.0
+cam0:
+  cam_overlaps: []
+  camera_model: pinhole
+  distortion_coeffs: [0, 0, 0, 0]
+  distortion_model: none
+  intrinsics: [721.5377, 721.5377, 609.5593, 172.8540]
+  resolution: [1242, 375]
+  rostopic: /none

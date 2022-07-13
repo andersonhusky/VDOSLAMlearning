@@ -1,0 +1,10 @@
+%YAML:1.0
+cam0:
+  cam_overlaps: []
+  camera_model: pinhole
+  distortion_coeffs: [-0.2458507254497594, 0.06131923199679035, 0.002562138796502744,
+    -0.0051117336090332095]
+  distortion_model: radtan
+  intrinsics: [344.05169218099115, 346.0379469324438, 373.50696408718, 222.36889041474015]
+  resolution: [720, 465]
+  rostopic: /cam_front_center_0/csi_cam/image_raw

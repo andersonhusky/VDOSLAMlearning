@@ -32,9 +32,9 @@ public:
     // <<<<<<<<<<<<<<<<<<<< output for graph structure >>>>>>>>>>>>>>>>>>>
 
     // static features and depths detected in image plane. (k*n)
-    std::vector<std::vector<cv::KeyPoint> > vpFeatSta;
-    std::vector<std::vector<float> > vfDepSta;
-    std::vector<std::vector<cv::Mat> > vp3DPointSta;
+    std::vector<std::vector<cv::KeyPoint> > vpFeatSta;                                                                      //vec< 静态特征点vec（一帧）>
+    std::vector<std::vector<float> > vfDepSta;                                                                                        // 深度信息
+    std::vector<std::vector<cv::Mat> > vp3DPointSta;                                                                        // 恢复的3D点
     // index of temporal matching. (k-1)*n
     std::vector<std::vector<int> > vnAssoSta;
     // feature tracklets: pair.first = frameID; pair.second = featureID;
@@ -42,9 +42,9 @@ public:
 
 
     // dynamic feature correspondences and depths detected in image plane. k*n
-    std::vector<std::vector<cv::KeyPoint> > vpFeatDyn;
-    std::vector<std::vector<float> > vfDepDyn;
-    std::vector<std::vector<cv::Mat> > vp3DPointDyn;
+    std::vector<std::vector<cv::KeyPoint> > vpFeatDyn;                                                                      // vec< 动态特征点vec（一帧）>
+    std::vector<std::vector<float> > vfDepDyn;                                                                                         // 深度信息
+    std::vector<std::vector<cv::Mat> > vp3DPointDyn;                                                                        // 恢复的3D点
     // index of temporal matching. (k-1)*n
     std::vector<std::vector<int> > vnAssoDyn;
     // label indicating which object the feature (3D point) belongs to. (k-1)*n
@@ -55,9 +55,9 @@ public:
 
 
     // absolute camera pose of each frame, starting from 1st frame. (k*1)
-    std::vector<cv::Mat> vmCameraPose;
-    std::vector<cv::Mat> vmCameraPose_RF;  // refine result
-    std::vector<cv::Mat> vmCameraPose_GT;  // ground truth result
+    std::vector<cv::Mat> vmCameraPose;                                                                                                  // 计算的相机位姿结果
+    std::vector<cv::Mat> vmCameraPose_RF;                                                                                           // 相机位姿优化后的结果refine result
+    std::vector<cv::Mat> vmCameraPose_GT;                                                                                           // 相机位姿真值ground truth result
     // rigid motion of camera and dynamic points. (k-1)*m
     std::vector<std::vector<cv::Mat> > vmRigidCentre;  // ground truth object center
     std::vector<std::vector<cv::Mat> > vmRigidMotion;

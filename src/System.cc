@@ -73,12 +73,27 @@ cv::Mat System::TrackRGBD(const cv::Mat &im, cv::Mat &depthmap, const cv::Mat &f
     return Tcw;
 }
 
+cv::Mat System::TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
+                    const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, 
+                    const double &timestamp, cv::Mat &imTraj, const int &nImage)
+{
+    if(mSensor!=RGBD)
+    {
+        cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
+        exit(-1);
+    }
+
+    cv::Mat Tcw = mpTracker->GrabImageRGBD(im,imobjpcl,depthmap,flowmap,masksem,mTcw_gt,vObjPose_gt,timestamp,imTraj,nImage);
+
+    return Tcw;
+}
+
 void System::SaveResults(const string &filename)
 {
     cout << endl << "Saving Results into TXT File..." << endl;
 
     // *******************************************************************************************************
-    // ***************************************** SAVE OBJ SPEED **********************************************
+    // ***************************************** SAVE OBJ SPEED ********************************************
     // *******************************************************************************************************
 
     ofstream save_objmot, save_objmot_rf, save_objmot_gt, save_obj_centre;

@@ -659,6 +659,503 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB, cv::Mat &imD, const cv::Ma
     return mCurrentFrame.mTcw.clone();
 }
 
+cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imObjPcl, cv::Mat &imD, const cv::Mat &imFlow,
+                                const cv::Mat &maskSEM, const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt,
+                                const double &timestamp, cv::Mat &imTraj, const int &nImage)
+{
+    // initialize some paras
+    StopFrame = nImage-1;
+    bJoint = true;
+    cv::RNG rng((unsigned)time(NULL));
+
+    // Initialize Global ID
+    if (mState==NO_IMAGES_YET)
+        f_id = 0;
+
+    mImGray = imRGB;
+
+    // preprocess depth  !!! important for kitti and oxford dataset
+    for (int i = 0; i < imD.rows; i++)
+    {
+        for (int j = 0; j < imD.cols; j++)
+        {
+            if (imD.at<float>(i,j)<0)
+                imD.at<float>(i,j)=0;
+            else
+            {
+                if (mTestData==OMD)
+                {
+                    // --- for stereo depth map ---
+                    imD.at<float>(i,j) = mbf/(imD.at<float>(i,j)/mDepthMapFactor);
+                    // --- for RGB-D depth map ---
+                    // imD.at<float>(i,j) = imD.at<float>(i,j)/mDepthMapFactor;
+                }
+                else if (mTestData==KITTI)
+                {
+                    // --- for stereo depth map ---
+                    // imD.at<float>(i,j) = mbf/(imD.at<float>(i,j)/mDepthMapFactor);
+                    // --- for monocular depth map ---
+                    imD.at<float>(i,j) = imD.at<float>(i,j)/500.0;
+                }
+            }
+        }
+    }
+
+    cv::Mat imDepth = imD;
+
+    // Transfer color image to grey image
+    if(mImGray.channels()==3)
+    {
+        if(mbRGB)
+            cvtColor(mImGray,mImGray,CV_RGB2GRAY);
+        else
+            cvtColor(mImGray,mImGray,CV_BGR2GRAY);
+    }
+    else if(mImGray.channels()==4)
+    {
+        if(mbRGB)
+            cvtColor(mImGray,mImGray,CV_RGBA2GRAY);
+        else
+            cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
+    }
+
+    // Save map in the tracking head (new added Nov 14 2019)
+    mDepthMap = imD;
+    mFlowMap = imFlow;
+    mSegMap = maskSEM;
+
+    // Initialize timing vector (Output)
+    // 存储5个处理时间：update_mask_time, cam_pos_time，obj_tra_time，obj_mot_time，map_upd_time
+    all_timing.resize(5,0);
+
+    // (new added Nov 21 2019)
+    if (mState!=NO_IMAGES_YET)
+    {
+        clock_t s_0, e_0;
+        double mask_upd_time;
+        s_0 = clock();
+        // ****** Update Mask information *******
+        UpdateMask();
+        e_0 = clock();
+        mask_upd_time = (double)(e_0-s_0)/CLOCKS_PER_SEC*1000;
+        all_timing[0] = mask_upd_time;
+        // cout << "mask updating time: " << mask_upd_time << endl;
+    }
+
+    cv::Mat imObjIdx = cv::Mat::zeros(mImGray.size(), CV_8U);
+    mCurrentFrame = Frame(mImGray,imDepth, imObjIdx, imObjPcl, imFlow,maskSEM,timestamp,mpORBextractorLeft, mK,mDistCoef,mbf,mThDepth,mThDepthObj,nUseSampleFea);
+
+    // ---------------------------------------------------------------------------------------
+    // +++++++++++++++++++++++++ For sampled features ++++++++++++++++++++++++++++++++++++++++
+    // ---------------------------------------------------------------------------------------
+
+    if(mState!=NO_IMAGES_YET)
+    {
+        // 上一帧的光流结果
+        cout << "Update Current Frame From Last....." << endl;
+        mCurrentFrame.mvStatKeys = mLastFrame.mvCorres;
+        mCurrentFrame.N_s = mCurrentFrame.mvStatKeys.size();
+        mCurrentFrame.mvStatDepth = std::vector<float>(mCurrentFrame.N_s,-1);
+        int num_without_itpD = 0;
+        for(int i=0; i<mCurrentFrame.N_s; i++)
+        {
+            const cv::KeyPoint &kp = mCurrentFrame.mvStatKeys[i];
+
+            const int v = kp.pt.y;
+            const int u = kp.pt.x;
+
+            if (u<(mImGray.cols-1) && u>0 && v<(mImGray.rows-1) && v>0)
+            {
+                // todo 深度差值
+                float d = imDepth.at<float>(v,u); // be careful with the order  !!!
+
+                if(d>0){
+                    mCurrentFrame.mvStatDepth[i] = d;
+                    ++num_without_itpD;
+                }
+            }
+        }
+        std::cout << "num without interpolation depth: " << num_without_itpD << std::endl;
+
+        // *********** Save object keypoints and depths ************
+        // 带tmp名变量存储Frame初始化时构建的obj关键点信息
+        mvTmpObjKeys = mCurrentFrame.mvObjKeys;
+        mvTmpObjDepth = mCurrentFrame.mvObjDepth;
+        mvTmpSemObjLabel = mCurrentFrame.vSemObjLabel;
+        mvTmpObjFlowNext = mCurrentFrame.mvObjFlowNext;
+        mvTmpObjCorres = mCurrentFrame.mvObjCorres;
+        // 上一帧光流来的obj信息保存在当前帧
+        mCurrentFrame.mvObjKeys = mLastFrame.mvObjCorres;
+        // todo: 处理depth和label的产生
+        mCurrentFrame.mvObjDepth.resize(mCurrentFrame.mvObjKeys.size(),-1);
+        mCurrentFrame.vSemObjLabel.resize(mCurrentFrame.mvObjKeys.size(),-1);
+        for (int i = 0; i < mCurrentFrame.mvObjKeys.size(); ++i)
+        {
+            const int u = mCurrentFrame.mvObjKeys[i].pt.x;
+            const int v = mCurrentFrame.mvObjKeys[i].pt.y;
+            // change here
+            float d = DepthInterpolation(maskSEM, imDepth, v, u);
+            int obj_idx = GetObjectIdx(imObjIdx, v, u);
+            if (u<(mImGray.cols-1) && u>0 && v<(mImGray.rows-1) && v>0 && d<mThDepthObj && d>0)
+            {
+                mCurrentFrame.mvObjDepth[i] = d;
+                mCurrentFrame.vSemObjLabel[i] = obj_idx;
+            }
+            else
+            {
+                mCurrentFrame.mvObjDepth[i] = 0.1;
+                mCurrentFrame.vSemObjLabel[i] = 0;
+            }
+        }
+
+        // **********************************************************
+        // // show image
+        // cv::Mat img_show;
+        // cv::drawKeypoints(mImGray, mCurrentFrame.mvObjKeys, img_show, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+        // cv::imshow("Dense Feature Distribution 2", img_show);
+        // cv::waitKey(0);
+        cout << "Update Current Frame, Done!" << endl;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+    // 计算pose和object真值
+    // Assign pose ground truth
+    if (mState==NO_IMAGES_YET)
+    {
+        mCurrentFrame.mTcw_gt = Converter::toInvMatrix(mTcw_gt);
+        mOriginInv = mTcw_gt;
+    }
+    else
+    {
+        mCurrentFrame.mTcw_gt = Converter::toInvMatrix(mTcw_gt)*mOriginInv;
+    }
+    // Assign object pose ground truth
+    mCurrentFrame.nSemPosi_gt.resize(vObjPose_gt.size());
+    mCurrentFrame.vObjPose_gt.resize(vObjPose_gt.size());
+    for (int i = 0; i < vObjPose_gt.size(); ++i){
+        // 对应的object序号
+        mCurrentFrame.nSemPosi_gt[i] = vObjPose_gt[i][1];
+        // 真值数据转化为位姿
+        if (mTestData==OMD)
+            mCurrentFrame.vObjPose_gt[i] = ObjPoseParsingOX(vObjPose_gt[i]);
+        else if (mTestData==KITTI)
+            mCurrentFrame.vObjPose_gt[i] = ObjPoseParsingKT(vObjPose_gt[i]);
+    }
+
+    // 存储光流的tmp结果
+    // Save temperal matches for visualization
+    TemperalMatch = vector<int>(mCurrentFrame.N_s,-1);
+    // Initialize object label
+    mCurrentFrame.vObjLabel.resize(mCurrentFrame.mvObjKeys.size(),-2);
+
+    // *** main ***
+    cout << "Start Tracking ......" << endl;
+    Track();
+    cout << "End Tracking ......" << endl;
+    // ************
+
+    // Update Global ID
+    f_id = f_id + 1;
+
+    // ---------------------------------------------------------------------------------------------
+    // ++++++++++++++++++++++++++++++++ Display Information ++++++++++++++++++++++++++++++++++++++++
+    // ---------------------------------------------------------------------------------------------
+
+    // // // ************** display label on the image ***************  // //
+    // 根据TemperalMatch_subset结果绘制静态点
+    // 根据mCurrentFrame.vObjLabel结果绘制动态点
+    if(timestamp!=0 && bFrame2Frame == true)
+    {
+        std::vector<cv::KeyPoint> KeyPoints_tmp(1);
+        // background features
+        // for (int i = 0; i < mCurrentFrame.mvStatKeys.size(); i=i+1)
+        // {
+        //     KeyPoints_tmp[0] = mCurrentFrame.mvStatKeys[i];
+        //     if(maskSEM.at<int>(KeyPoints_tmp[0].pt.y,KeyPoints_tmp[0].pt.x)!=0)
+        //         continue;
+        //     cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,0,255), 1); // red
+        // }
+        // 绘制静态点
+        for (int i = 0; i < TemperalMatch_subset.size(); i=i+1)
+        {
+            if (TemperalMatch_subset[i]>=mCurrentFrame.mvStatKeys.size())
+                continue;
+            KeyPoints_tmp[0] = mCurrentFrame.mvStatKeys[TemperalMatch_subset[i]];
+            if (KeyPoints_tmp[0].pt.x>=(mImGray.cols-1) || KeyPoints_tmp[0].pt.x<=0 || KeyPoints_tmp[0].pt.y>=(mImGray.rows-1) || KeyPoints_tmp[0].pt.y<=0)
+                continue;
+            if(maskSEM.at<int>(KeyPoints_tmp[0].pt.y,KeyPoints_tmp[0].pt.x)!=0)
+                continue;
+            cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,0,0), 1); // red
+        }
+        // static and dynamic objects
+        for (int i = 0; i < mCurrentFrame.vObjLabel.size(); ++i)
+        {
+            if(mCurrentFrame.vObjLabel[i]==-1 || mCurrentFrame.vObjLabel[i]==-2)
+                continue;
+            int l = mCurrentFrame.vObjLabel[i];
+            if (l>25)
+                l = l/2;
+            // int l = mCurrentFrame.vSemObjLabel[i];
+            // cout << "label: " << l << endl;
+            KeyPoints_tmp[0] = mCurrentFrame.mvObjKeys[i];
+            if (KeyPoints_tmp[0].pt.x>=(mImGray.cols-1) || KeyPoints_tmp[0].pt.x<=0 || KeyPoints_tmp[0].pt.y>=(mImGray.rows-1) || KeyPoints_tmp[0].pt.y<=0)
+                continue;
+            switch (l)
+            {
+                case 0:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,0,255), 1); // red
+                    break;
+                case 1:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(128, 0, 128), 1); // 255, 165, 0
+                    break;
+                case 2:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,255,0), 1);
+                    break;
+                case 3:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0, 255, 0), 1); // 255,255,0
+                    break;
+                case 4:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,0,0), 1); // 255,192,203
+                    break;
+                case 5:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,255,255), 1);
+                    break;
+                case 6:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(128, 0, 128), 1);
+                    break;
+                case 7:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,255,255), 1);
+                    break;
+                case 8:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,228,196), 1);
+                    break;
+                case 9:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(180, 105, 255), 1);
+                    break;
+                case 10:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(165,42,42), 1);
+                    break;
+                case 11:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(35, 142, 107), 1);
+                    break;
+                case 12:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(45, 82, 160), 1);
+                    break;
+                case 13:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,0,255), 1); // red
+                    break;
+                case 14:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255, 165, 0), 1);
+                    break;
+                case 15:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,255,0), 1);
+                    break;
+                case 16:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,255,0), 1);
+                    break;
+                case 17:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,192,203), 1);
+                    break;
+                case 18:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(0,255,255), 1);
+                    break;
+                case 19:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(128, 0, 128), 1);
+                    break;
+                case 20:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,255,255), 1);
+                    break;
+                case 21:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(255,228,196), 1);
+                    break;
+                case 22:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(180, 105, 255), 1);
+                    break;
+                case 23:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(165,42,42), 1);
+                    break;
+                case 24:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(35, 142, 107), 1);
+                    break;
+                case 25:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(45, 82, 160), 1);
+                    break;
+                case 41:
+                    cv::drawKeypoints(imRGB, KeyPoints_tmp, imRGB, cv::Scalar(60, 20, 220), 1);
+                    break;
+            }
+        }
+        cv::imshow("Static Background and Object Points", imRGB);
+        // cv::imwrite("feat.png",imRGB);
+        if (f_id<4)
+            cv::waitKey(1);
+        else
+            cv::waitKey(1);
+
+    }
+
+    // ************** show bounding box with speed ***************
+    // 根据mCurrentFrame.vObjBoxID绘制bounding box
+    if(timestamp!=0 && bFrame2Frame == true && mTestData==KITTI)
+    {
+        cv::Mat mImBGR(mImGray.size(), CV_8UC3);
+        cvtColor(mImGray, mImBGR, CV_GRAY2RGB);
+        for (int i = 0; i < mCurrentFrame.vObjBoxID.size(); ++i)
+        {
+            if (mCurrentFrame.vSpeed[i].x==0)
+                continue;
+            // cout << "ID: " << mCurrentFrame.vObjBoxID[i] << endl;
+            // 直接读取真值的object bounding box
+            cv::Point pt1(vObjPose_gt[mCurrentFrame.vObjBoxID[i]][2], vObjPose_gt[mCurrentFrame.vObjBoxID[i]][3]);
+            cv::Point pt2(vObjPose_gt[mCurrentFrame.vObjBoxID[i]][4], vObjPose_gt[mCurrentFrame.vObjBoxID[i]][5]);
+            // cout << pt1.x << " " << pt1.y << " " << pt2.x << " " << pt2.y << endl;
+            cv::rectangle(mImBGR, pt1, pt2, cv::Scalar(0, 255, 0),2);
+            // string sp_gt = std::to_string(mCurrentFrame.vSpeed[i].y);
+            string sp_est = std::to_string(mCurrentFrame.vSpeed[i].x/36);
+            // sp_gt.resize(5);
+            sp_est.resize(5);
+            // string output_gt = "GT:" + sp_gt + "km/h";
+            string output_est = sp_est + "km/h";
+            cv::putText(mImBGR, output_est, cv::Point(pt1.x, pt1.y-10), cv::FONT_HERSHEY_DUPLEX, 0.9, CV_RGB(0,255,0), 2); // CV_RGB(255,140,0)
+            // cv::putText(mImBGR, output_gt, cv::Point(pt1.x, pt1.y-32), cv::FONT_HERSHEY_DUPLEX, 0.7, CV_RGB(255, 0, 0), 2);
+        }
+        cv::imshow("Object Speed", mImBGR);
+        cv::waitKey(1);
+    }
+
+    // // ************** show trajectory results ***************
+    // 根据相机位姿绘制轨迹（只关注xy）
+    // 根据mCurrentFrame.vObjCentre3D和mCurrentFrame.nModLabel绘制obj轨迹（只关注xy）
+    if (mTestData==KITTI)
+    {
+        int sta_x = 300, sta_y = 100, radi = 1, thic = 2;  // (160/120/2/5)
+        float scale = 6;
+        cv::Mat CamPos = Converter::toInvMatrix(mCurrentFrame.mTcw);
+        int x = int(CamPos.at<float>(0,3)*scale) + sta_x;
+        int y = int(CamPos.at<float>(2,3)*scale) + sta_y;
+        // cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(255,0,0), thic);
+        cv::rectangle(imTraj, cv::Point(x, y), cv::Point(x+5, y+5), cv::Scalar(0,0,255),1);
+        cv::rectangle(imTraj, cv::Point(10, 30), cv::Point(550, 60), CV_RGB(0,0,0), CV_FILLED);
+        cv::putText(imTraj, "Camera Trajectory (RED SQUARE)", cv::Point(10, 30), cv::FONT_HERSHEY_COMPLEX, 0.6, CV_RGB(255, 255, 255), 1);
+        char text[100];
+        sprintf(text, "x = %02fm y = %02fm z = %02fm", CamPos.at<float>(0,3), CamPos.at<float>(1,3), CamPos.at<float>(2,3));
+        cv::putText(imTraj, text, cv::Point(10, 50), cv::FONT_HERSHEY_COMPLEX, 0.6, cv::Scalar::all(255), 1);
+        cv::putText(imTraj, "Object Trajectories (COLORED CIRCLES)", cv::Point(10, 70), cv::FONT_HERSHEY_COMPLEX, 0.6, CV_RGB(255, 255, 255), 1);
+
+        for (int i = 0; i < mCurrentFrame.vObjCentre3D.size(); ++i)
+        {
+            if (mCurrentFrame.vObjCentre3D[i].at<float>(0,0)==0 && mCurrentFrame.vObjCentre3D[i].at<float>(0,2)==0)
+                continue;
+            int x = int(mCurrentFrame.vObjCentre3D[i].at<float>(0,0)*scale) + sta_x;
+            int y = int(mCurrentFrame.vObjCentre3D[i].at<float>(0,2)*scale) + sta_y;
+            // int l = mCurrentFrame.nSemPosition[i];
+            int l = mCurrentFrame.nModLabel[i];
+            switch (l)
+            {
+                case 1:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(128, 0, 128), thic); // orange
+                    break;
+                case 2:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(0,255,255), thic); // green
+                    break;
+                case 3:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(0, 255, 0), thic); // yellow
+                    break;
+                case 4:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(0,0,255), thic); // pink
+                    break;
+                case 5:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(255,255,0), thic); // cyan (yellow green 47,255,173)
+                    break;
+                case 6:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(128, 0, 128), thic); // purple
+                    break;
+                case 7:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(255,255,255), thic);  // white
+                    break;
+                case 8:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(196,228,255), thic); // bisque
+                    break;
+                case 9:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(180, 105, 255), thic);  // blue
+                    break;
+                case 10:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(42,42,165), thic);  // brown
+                    break;
+                case 11:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(35, 142, 107), thic);
+                    break;
+                case 12:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(45, 82, 160), thic);
+                    break;
+                case 41:
+                    cv::circle(imTraj, cv::Point(x, y), radi, CV_RGB(60, 20, 220), thic);
+                    break;
+            }
+        }
+
+        imshow( "Camera and Object Trajectories", imTraj);
+        if (f_id<3)
+            cv::waitKey(1);
+        else
+            cv::waitKey(1);
+    }
+
+
+    if(timestamp!=0 && bFrame2Frame == true && mTestData==OMD)
+    {
+        PlotMetricError(mpMap->vmCameraPose,mpMap->vmRigidMotion, mpMap->vmObjPosePre,
+                       mpMap->vmCameraPose_GT,mpMap->vmRigidMotion_GT, mpMap->vbObjStat);
+    }
+
+
+    // // // ************** display temperal matching ***************
+    // if(timestamp!=0 && bFrame2Frame == true)
+    // {
+    //     std::vector<cv::KeyPoint> PreKeys, CurKeys;
+    //     std::vector<cv::DMatch> TemperalMatches;
+    //     int count =0;
+    //     for(int iL=0; iL<mvKeysCurrentFrame.size(); iL=iL+50)
+    //     {
+    //         if(maskSEM.at<int>(mvKeysCurrentFrame[iL].pt.y,mvKeysCurrentFrame[iL].pt.x)!=0)
+    //             continue;
+    //         // if(TemperalMatch[iL]==-1)
+    //         //     continue;
+    //         // if(checkit[iL]==0)
+    //         //     continue;
+    //         // if(mCurrentFrame.vObjLabel[iL]<=0)
+    //         //     continue;
+    //         // if(cv::norm(mCurrentFrame.vFlow_3d[iL])<0.15)
+    //         //     continue;
+    //         PreKeys.push_back(mvKeysLastFrame[TemperalMatch[iL]]);
+    //         CurKeys.push_back(mvKeysCurrentFrame[iL]);
+    //         TemperalMatches.push_back(cv::DMatch(count,count,0));
+    //         count = count + 1;
+    //     }
+    //     // cout << "temperal features numeber: " << count <<  endl;
+
+    //     cv::Mat img_matches;
+    //     drawMatches(mImGrayLast, PreKeys, mImGray, CurKeys,
+    //                 TemperalMatches, img_matches, cv::Scalar::all(-1), cv::Scalar::all(-1),
+    //                 vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+    //     cv::resize(img_matches, img_matches, cv::Size(img_matches.cols/1.0, img_matches.rows/1.0));
+    //     cv::namedWindow("temperal matches", cv::WINDOW_NORMAL);
+    //     cv::imshow("temperal matches", img_matches);
+    //     cv::waitKey(0);
+    // }
+
+    // ---------------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------------
+
+    mImGrayLast = mImGray;
+    TemperalMatch.clear();
+    mSegMapLast = mSegMap;   // new added Nov 21 2019
+    mFlowMapLast = mFlowMap; // new added Nov 21 2019
+
+    return mCurrentFrame.mTcw.clone();
+}
+
 
 void Tracking::Track()
 {
@@ -1667,21 +2164,29 @@ std::vector<std::vector<int> > Tracking::DynObjTracking()
     return ObjIdNew;
 }
 
+//! 函数功能 计算相机的初始位姿（P3P和运动模型选择较好的那个）
+//!
+//! \param MatchId 上一帧光流得到的匹配
+//! \param MatchId_sub 在初计算位姿下被标记为内点的匹配
+//! \return output 计算得到的相机位姿
 cv::Mat Tracking::GetInitModelCam(const std::vector<int> &MatchId, std::vector<int> &MatchId_sub)
 {
     cv::Mat Mod = cv::Mat::eye(4,4,CV_32F);
     int N = MatchId.size();
 
-    // construct input
+    // construct 
+    // 存放光流匹配点的结果和3D点结果
     std::vector<cv::Point2f> cur_2d(N);
     std::vector<cv::Point3f> pre_3d(N);
     for (int i = 0; i < N; ++i)
     {
+        // 当前帧的位置
         cv::Point2f tmp_2d;
         tmp_2d.x = mCurrentFrame.mvStatKeys[MatchId[i]].pt.x;
         tmp_2d.y = mCurrentFrame.mvStatKeys[MatchId[i]].pt.y;
         cur_2d[i] = tmp_2d;
         cv::Point3f tmp_3d;
+        // 通过上一帧计算的特征点世界坐标
         cv::Mat x3D_p = mLastFrame.UnprojectStereoStat(MatchId[i],0);
         tmp_3d.x = x3D_p.at<float>(0);
         tmp_3d.y = x3D_p.at<float>(1);
@@ -1719,12 +2224,14 @@ cv::Mat Tracking::GetInitModelCam(const std::vector<int> &MatchId, std::vector<i
 
 
     // calculate the re-projection error
-    std::vector<int> MM_inlier;
+    // 使用运动模型计算内点数目
+    std::vector<int> MM_inlier;  
     cv::Mat MotionModel;
     if (mVelocity.empty())
         MotionModel = cv::Mat::eye(4,4,CV_32F)*mLastFrame.mTcw;
     else
         MotionModel = mVelocity*mLastFrame.mTcw;
+    // 运动模型下的内点
     for (int i = 0; i < N; ++i)
     {
         const cv::Mat x3D  = (cv::Mat_<float>(3,1) << pre_3d[i].x, pre_3d[i].y, pre_3d[i].z);
@@ -1746,7 +2253,7 @@ cv::Mat Tracking::GetInitModelCam(const std::vector<int> &MatchId, std::vector<i
     // cout << "Inlier Compare: " << "(1)AP3P RANSAC: " << inliers.rows << " (2)Motion Model: " << MM_inlier.size() << endl;
 
     cv::Mat output;
-
+    // 比较运动模型和P3P，选取较好的结果
     if (inliers.rows>MM_inlier.size())
     {
         // save the inliers IDs
@@ -2073,6 +2580,10 @@ void Tracking::TransformPointToScaledFrustum(double &pose_x, double &pose_z, con
     pose_z *= viz_props.birdeye_scale_factor_;
 }
 
+//! 函数功能
+//!
+//! \param vObjPose_gt obj对应的真值数据：帧序号、obj序号、2D bounding box左上右下坐标（2-5）、位移（6-8）、Y轴旋转角
+//! \return Pose object位姿真值矩阵
 cv::Mat Tracking::ObjPoseParsingKT(const std::vector<float> &vObjPose_gt)
 {
     // assign t vector
@@ -3859,5 +4370,101 @@ void Tracking::GetVelocityError(const std::vector<std::vector<cv::Mat> > &RigMot
 
 // ---------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------
+float Tracking::DepthInterpolation(const cv::Mat &maskSEM, const cv::Mat &imDepth, const int &row, const int &col){
+    cv::RNG rng((unsigned)time(NULL));
+    int window_size= 20;
+    std::vector<cv::Point3f> points;
+    points.reserve(window_size*window_size/4);
 
+    for(int i=row-window_size/2; i<row+window_size/2; ++i){
+        for(int j=col-window_size/2; j<col+window_size/2; ++j){
+            float d = imDepth.at<float>(i, j);
+            if(d>0 && maskSEM.at<int>(i, j)!=0)
+                points.push_back(cv::Point3f(j, i, d));
+        }
+    }
+    if(points.size()<3) return -1.f;
+
+    std::vector<cv::Point3f> three_points(3);
+    for(int i=0; i<3; ++i){
+        int idx = rng.uniform(0, points.size());
+        three_points[i] = cv::Point3f(points[idx]);
+        swap(points[idx], points[points.size()-1]);
+        points.pop_back();
+    }
+
+    cv::Vec4i LineA{int(three_points[0].x), int(three_points[0].y), int(three_points[1].x), int(three_points[1].y)};
+    cv::Vec4i LineB{int(three_points[2].x), int(three_points[2].y), col, row};
+    cv::Point crossPoint = GetCrossPoint(LineA, LineB);
+    if(crossPoint.x>col+window_size || crossPoint.x<col-window_size || crossPoint.y>row+window_size || crossPoint.y<row-window_size)
+        return -1.f;
+
+    // std::cout << crossPoint.x << ", " << crossPoint.y << std::endl;
+    // cv::Mat img_copy;
+    // mImGray.copyTo(img_copy);
+    // cv::cvtColor(img_copy, img_copy, cv::COLOR_GRAY2RGB);
+    // cv::Point p1(int(three_points[0].x), int(three_points[0].y));
+    // cv::Point p2(int(three_points[1].x), int(three_points[1].y));
+    // cv::Point p3(int(three_points[2].x), int(three_points[2].y));
+    // cv::Point p(col, row);
+    // cv::line(img_copy, p1, p2, cv::Scalar(255, 255, 255), 1);
+    // cv::line(img_copy, p2, p3, cv::Scalar(255, 255, 255), 1);
+    // cv::line(img_copy, p3, p1, cv::Scalar(255, 255, 255), 1);
+    // cv::circle(img_copy, p1, 1, cv::Scalar(0, 0, 255), -1);
+    // cv::circle(img_copy, p2, 1, cv::Scalar(0, 255, 255), -1);
+    // cv::circle(img_copy, p3, 1, cv::Scalar(255, 0, 0), -1);
+    // cv::circle(img_copy, p, 1, cv::Scalar(0, 0, 0), -1);
+    // cv::circle(img_copy, crossPoint, 1, cv::Scalar(0, 255, 0), -1);
+
+    // cv::Mat img_part;
+    // img_copy.rowRange(row-window_size, row+window_size).colRange(col-window_size, col+window_size).copyTo(img_part);
+    // cv::resize(img_part, img_part, cv::Size(200, 200),0,0,cv::INTER_LINEAR );
+    // cv::imshow("test", img_part);
+    // cv::waitKey(0);
+
+    float interpolation_depth;
+    float k1 = (crossPoint.x-three_points[0].x)/(three_points[1].x-three_points[0].x);
+    float k2 = (row-crossPoint.y)/(three_points[2].y-crossPoint.y);
+    if(k1<-30 || k1>30 || k2<-30 || k2>30)
+        return -1.f;
+    float crossPoint_depth = three_points[0].z + (three_points[1].z - three_points[0].z)*k1;
+    interpolation_depth = crossPoint_depth + (three_points[2].z - crossPoint_depth)*k2;
+    // std::cout << "Depth: " << three_points[0].z << ", " << three_points[1].z << ", " << three_points[2].z << ", " << interpolation_depth << std::endl;
+    return interpolation_depth;
+}
+
+cv::Point2f Tracking::GetCrossPoint(cv::Vec4i LineA, cv::Vec4i LineB)
+{
+    cv::Point2f crossPoint{0, 0};
+    double ka, kb;
+    ka = (double)(LineA[3] - LineA[1]) / (double)(LineA[2] - LineA[0]); //求出LineA斜率
+    kb = (double)(LineB[3] - LineB[1]) / (double)(LineB[2] - LineB[0]); //求出LineB斜率
+    if(ka-kb==0) return crossPoint;
+
+    crossPoint.x = (ka*LineA[0] - LineA[1] - kb*LineB[0] + LineB[1]) / (ka - kb);
+    crossPoint.y = (ka*kb*(LineA[0] - LineB[0]) + ka*LineB[1] - kb*LineA[1]) / (ka - kb);
+    return crossPoint;
+}
+
+int Tracking::GetObjectIdx(const cv::Mat &imObjidx, const int &row, const int &col){
+    int window_size= 20;
+    unordered_map<int, int> obj_idxs;
+    for(int i=row-window_size/2; i<row+window_size/2; ++i){
+        for(int j=col-window_size/2; j<col+window_size/2; ++j){
+          int idx = int(imObjidx.at<ushort>(i, j));
+            if(idx!=0)
+                obj_idxs[idx]++;
+        }
+    }
+
+    int result_idx=0;
+    int max_num=0;
+    for(auto p: obj_idxs){
+        if(p.second>max_num){
+            result_idx = p.first;
+            max_num = p.second;
+        }
+    }
+    return result_idx;
+}
 } //namespace VDO_SLAM

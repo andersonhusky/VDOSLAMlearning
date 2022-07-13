@@ -41,13 +41,17 @@ endif()
 
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(CSparse REQUIRED)
+find_package(PCL 1.2 REQUIRED)
 
 include_directories(
 ${PROJECT_SOURCE_DIR}
 ${PROJECT_SOURCE_DIR}/include
 ${EIGEN3_INCLUDE_DIR}
 ${CSPARSE_INCLUDE_DIR}
+${PCL_INCLUDE_DIRS}
 )
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
@@ -59,6 +63,7 @@ src/Converter.cc
 src/Map.cc
 src/Optimizer.cc
 src/Frame.cc
+src/yaml_reader.cpp
 
 src/cvplot/color.cc
 src/cvplot/figure.cc
@@ -76,6 +81,7 @@ ${CSPARSE_LIBRARY}
 #${PROJECT_SOURCE_DIR}/dependencies/g2o/lib/libg2o.dylib
 # for linux (ubuntu)
 ${PROJECT_SOURCE_DIR}/dependencies/g2o/lib/libg2o.so
+${PCL_LIBRARIES}
 )
 
 
@@ -83,8 +89,16 @@ ${PROJECT_SOURCE_DIR}/dependencies/g2o/lib/libg2o.so
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/example)
 
-add_executable(vdo_slam
-example/vdo_slam.cc)
-target_link_libraries(vdo_slam ${PROJECT_NAME})
+# add_executable(vdo_slam
+# example/vdo_slam.cc)
+# target_link_libraries(vdo_slam ${PROJECT_NAME})
+
+add_executable(vdo_slam_change
+example/vdo_slam_change.cc)
+target_link_libraries(vdo_slam_change ${PROJECT_NAME})
+
+# add_executable(test
+# example/test.cpp)
+# target_link_libraries(test ${PROJECT_NAME})
 
 

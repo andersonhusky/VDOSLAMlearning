@@ -152,6 +152,18 @@ int main(int argc, char **argv)
     return 0;
 }
 
+
+//! 函数功能
+//!
+//! \param strPathToSequence 数据所在文件夹路径
+//! \param vstrFilenamesSEM 保存mask文件路径
+//! \param vstrFilenamesRGB 保存RGB文件路径
+//! \param vstrFilenamesDEP 保存深度图文件路径
+//! \param vstrFilenamesFLO 保存光流文件路径
+//! \param vTimestamps 保存对应时间戳数据
+//! \param vPoseGT 保存对应位姿真值数据
+//! \param vObjPoseGT 保存对应目标位姿真值数据
+//! \return 返回值
 void LoadData(const string &strPathToSequence, vector<string> &vstrFilenamesSEM,
               vector<string> &vstrFilenamesRGB,vector<string> &vstrFilenamesDEP, vector<string> &vstrFilenamesFLO,
               vector<double> &vTimestamps, vector<cv::Mat> &vPoseGT, vector<vector<float> > &vObjPoseGT)
@@ -454,8 +466,8 @@ void LoadMask(const string &strFilenamesMask, cv::Mat &imMask)
     }
 
     // Display the img_mask
-    // cv::imshow("Segmentation Mask", imgLabel);
-    // cv::waitKey(1);
+    cv::imshow("Segmentation Mask", imgLabel);
+    cv::waitKey(1);
 
     return;
 

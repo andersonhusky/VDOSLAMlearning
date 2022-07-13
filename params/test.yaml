@@ -1,0 +1,15 @@
+%YAML:1.0
+---
+Time: "Thu Nov 28 14:02:31 2019\n"
+imageSize: [ 1280, 800 ]
+cameraMatrix: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ 190., 0., 640., 0., 190., 400., 0., 0., 1. ]
+distCoeffs: !!opencv-matrix
+   rows: 5
+   cols: 1
+   dt: d
+   data: [ 1.0000000000000001e-01, 1.0000000000000000e-02,
+       -1.0000000000000000e-03, 0., 0. ]

@@ -1,0 +1,9 @@
+%YAML:1.0
+cam0:
+  cam_overlaps: []
+  camera_model: pinhole
+  distortion_coeffs: [0.0701639184453884, -0.023678554273593593, 0.00774887429814232, -0.0015323805704984216]
+  distortion_model: equidistant
+  intrinsics: [237.3888831109751, 237.1388886913049, 484.25847411438144, 283.35856969536263]
+  resolution: [960, 540]
+  rostopic: /cam_fisheye_1/csi_cam/image_raw
