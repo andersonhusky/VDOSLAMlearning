@@ -69,9 +69,13 @@ public:
                           const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, const double &timestamp,
                           cv::Mat &imTraj, const int &nImage);
 
-    cv::Mat GrabImageRGBD(const cv::Mat &imRGB, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, cv::Mat &imD, const cv::Mat &imFlow,
+    cv::Mat GrabImageRGBD(const cv::Mat &imRGB, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, const cv::Mat &imFlow,
                                 const cv::Mat &maskSEM, const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt,
                                 const double &timestamp, cv::Mat &imTraj, const int &nImage);
+
+    cv::Mat GrabImageRGBD_change(const cv::Mat &imRGB, cv::Mat &imD, const cv::Mat &imFlow, const cv::Mat &maskSEM,
+                          const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, const double &timestamp,
+                          cv::Mat &imTraj, const int &nImage);
 
     // Sparse Scene Flow Vector
     void GetSceneFlowObj();
@@ -93,6 +97,7 @@ public:
     cv::Mat ObjPoseParsingOX(const std::vector<float> &vObjPose_gt);
 
     cv::Mat GetInitModelCam(const std::vector<int> &MatchId, std::vector<int> &MatchId_sub);
+    cv::Mat GetInitModelCam_change(const std::vector<int> &MatchId, std::vector<int> &MatchId_sub);
     cv::Mat GetInitModelObj(const std::vector<int> &ObjId, std::vector<int> &ObjId_sub, const int objid);
 
     void StackObjInfo(std::vector<cv::KeyPoint> &FeatDynObj, std::vector<float> &DepDynObj,
@@ -115,10 +120,11 @@ public:
                           const std::vector<std::vector<bool> > &ObjStat);
 
     void RenewFrameInfo(const std::vector<int> &TM_sta);
+    void RenewFrameInfo_change(const std::vector<int> &TM_sta);
 
     void UpdateMask();
 
-    float DepthInterpolation(const cv::Mat &maskSEM, const cv::Mat &imDepth, const int &row, const int &col);
+    float DepthInterpolation(const cv::Mat &maskSEM, const cv::Mat &imDepth, const int &row, const int &col, const bool dyna);
     cv::Point2f GetCrossPoint(cv::Vec4i LineA, cv::Vec4i LineB);
     int GetObjectIdx(const cv::Mat &imObjidx, const int &row, const int &col);
 
@@ -165,13 +171,13 @@ public:
 
     // Store temperal matching feature index
     bool bFrame2Frame,bFirstFrame;                                                                              // 是否是帧到帧，是否有第一帧++++++ new added
-    std::vector<int> TemperalMatch, TemperalMatch_subset;                              // 存储光流的结果，++++++ new added
-    std::vector<cv::KeyPoint> mvKeysLastFrame, mvKeysCurrentFrame;  // ++++++ new added
+    std::vector<int> TemperalMatch, TemperalMatch_subset;                              // 存储光流PnP和optimization计算的内点++++++ new added
+    std::vector<cv::KeyPoint> mvKeysLastFrame, mvKeysCurrentFrame;  // 存储上一帧和当前帧的静态特征点++++++ new added
 
     // 带tmp的变量存储来自Frame初始化的obj信息
     std::vector<cv::KeyPoint> mvTmpObjKeys;
     std::vector<float> mvTmpObjDepth;
-    std::vector<int> mvTmpSemObjLabel;
+    std::vector<int> mvTmpSemObjLabel;                                                                  // object每个点的mask序号，更改后为点云的文件序号
     std::vector<cv::Point2f> mvTmpObjFlowNext;
     std::vector<cv::KeyPoint> mvTmpObjCorres;
 
@@ -215,9 +221,11 @@ protected:
 
     // Main tracking function. It is independent of the input sensor.
     void Track();
+    void Track_change();
 
     // Map initialization
     void Initialization();
+    void Initialization_change();
 
     //ORB
     ORBextractor* mpORBextractorLeft, *mpORBextractorRight;

@@ -63,13 +63,16 @@ src/Converter.cc
 src/Map.cc
 src/Optimizer.cc
 src/Frame.cc
-src/yaml_reader.cpp
 
 src/cvplot/color.cc
 src/cvplot/figure.cc
 src/cvplot/highgui.cc
 src/cvplot/window.cc
 src/cvplot/internal.h
+
+src/yaml_reader.cpp
+src/Obj.cpp
+src/KeyP.cpp
 )
 
 target_link_libraries(
@@ -89,13 +92,13 @@ ${PCL_LIBRARIES}
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/example)
 
-# add_executable(vdo_slam
-# example/vdo_slam.cc)
-# target_link_libraries(vdo_slam ${PROJECT_NAME})
+add_executable(vdo_slam
+example/vdo_slam.cc)
+target_link_libraries(vdo_slam ${PROJECT_NAME})
 
-add_executable(vdo_slam_change
-example/vdo_slam_change.cc)
-target_link_libraries(vdo_slam_change ${PROJECT_NAME})
+# add_executable(vdo_slam_change
+# example/vdo_slam_change.cc)
+# target_link_libraries(vdo_slam_change ${PROJECT_NAME})
 
 # add_executable(test
 # example/test.cpp)

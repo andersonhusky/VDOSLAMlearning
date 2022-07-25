@@ -144,7 +144,7 @@ int main(int arg, char **argv){
         }
 
         // Pass the image to the SLAM system
-        SLAM.TrackRGBD(imRGB, imObjPcl, imD_f, imFlow, imSem, mTcw_gt, vObjPose_gt, tframe, imTraj, 56);
+        SLAM.TrackRGBD(imRGB, imObjPcl, imFlow, imSem, mTcw_gt, vObjPose_gt, tframe, imTraj, 56);
 
     }
 }
@@ -251,13 +251,21 @@ void LoadObjPcd(const string &strPathObjPcd, vector<pcl::PointCloud<pcl::PointXY
     }
     closedir(pDir);
 
-    for(int pcd_num=0; pcd_num<pcd_file_num; ++pcd_num){
-        std::string strFilenameObjPcd = strPathObjPcd + "cloud_cluster_" + std::to_string(pcd_num) + ".pcd";
+    for(int pcd_num=0, pcd_idx=0; pcd_num<pcd_file_num; ++pcd_num, ++pcd_idx){
+        std::string strFilenameObjPcd = strPathObjPcd + "cloud_cluster_" + std::to_string(pcd_idx) + ".pcd";
         pcl::PointCloud<pcl::PointXYZ>::Ptr obj_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        if(pcl::io::loadPCDFile<pcl::PointXYZ>(strFilenameObjPcd,*obj_cloud)==-1)
+        // if(pcl::io::loadPCDFile<pcl::PointXYZ>(strFilenameObjPcd,*obj_cloud)==-1)
+        // {
+        //     PCL_ERROR("Couldn't read file test_pcd.pcd \n");
+        //     return ;
+        // }
+        while(pcl::io::loadPCDFile<pcl::PointXYZ>(strFilenameObjPcd,*obj_cloud)==-1)
         {
-            PCL_ERROR("Couldn't read file test_pcd.pcd \n");
-            return ;
+            ++pcd_idx;
+            pcl::PointCloud<pcl::PointXYZ>::Ptr void_obj_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+            imObjPcl.push_back(void_obj_cloud);
+            strFilenameObjPcd = strPathObjPcd + "cloud_cluster_" + std::to_string(pcd_idx) + ".pcd";
+            if(pcd_idx>100) return;
         }
         cv::Mat X_l(4, 1, CV_64F);
         cv::Mat X_c(4, 1, CV_64F);

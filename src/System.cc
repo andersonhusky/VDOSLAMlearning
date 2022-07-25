@@ -73,7 +73,7 @@ cv::Mat System::TrackRGBD(const cv::Mat &im, cv::Mat &depthmap, const cv::Mat &f
     return Tcw;
 }
 
-cv::Mat System::TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
+cv::Mat System::TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, const cv::Mat &flowmap, const cv::Mat &masksem,
                     const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, 
                     const double &timestamp, cv::Mat &imTraj, const int &nImage)
 {
@@ -83,7 +83,7 @@ cv::Mat System::TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::P
         exit(-1);
     }
 
-    cv::Mat Tcw = mpTracker->GrabImageRGBD(im,imobjpcl,depthmap,flowmap,masksem,mTcw_gt,vObjPose_gt,timestamp,imTraj,nImage);
+    cv::Mat Tcw = mpTracker->GrabImageRGBD(im,imobjpcl,flowmap,masksem,mTcw_gt,vObjPose_gt,timestamp,imTraj,nImage);
 
     return Tcw;
 }
@@ -268,6 +268,19 @@ void System::SaveResults(const string &filename)
 
 }
 
+cv::Mat System::TrackRGBD_change(const cv::Mat &im, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
+                    const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, 
+                    const double &timestamp, cv::Mat &imTraj, const int &nImage)
+{
+    if(mSensor!=RGBD)
+    {
+        cerr << "ERROR: you called TrackRGBD but input sensor was not set to RGBD." << endl;
+        exit(-1);
+    }
 
+    cv::Mat Tcw = mpTracker->GrabImageRGBD_change(im,depthmap,flowmap,masksem,mTcw_gt,vObjPose_gt,timestamp,imTraj,nImage);
+
+    return Tcw;
+}
 
 } //namespace VDO_SLAM

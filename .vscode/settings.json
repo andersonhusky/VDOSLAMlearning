@@ -62,6 +62,9 @@
         "memory_resource": "cpp",
         "random": "cpp",
         "semaphore": "cpp",
-        "stop_token": "cpp"
+        "stop_token": "cpp",
+        "csignal": "cpp",
+        "numbers": "cpp",
+        "cinttypes": "cpp"
     }
 }

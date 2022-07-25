@@ -446,11 +446,11 @@ public:
   void computeError()  {
     const VertexSE3Expmap* v1 = static_cast<const VertexSE3Expmap*>(_vertices[1]);
     const VertexSBAFlow* v2 = static_cast<const VertexSBAFlow*>(_vertices[0]);
-    Vector2d obs(_measurement);
-    Vector2d est = v2->estimate();
+    Vector2d obs(_measurement);     // 对应上一帧的像素坐标
+    Vector2d est = v2->estimate();      // 光流向量
     Vector3d Xw;
-    Xw << (obs(0)-cx)*depth/fx, (obs(1)-cy)*depth/fy, depth;
-    Xw = Twl.block(0,0,3,3)*Xw + Twl.col(3).head(3);
+    Xw << (obs(0)-cx)*depth/fx, (obs(1)-cy)*depth/fy, depth;    // 上一帧相机坐标，此处深度为测量的深度，不改变
+    Xw = Twl.block(0,0,3,3)*Xw + Twl.col(3).head(3);                    // 上一帧世界坐标
     _error = (obs+est) - cam_project(v1->estimate().map(Xw));
   }
 

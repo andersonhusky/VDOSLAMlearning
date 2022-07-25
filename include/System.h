@@ -52,9 +52,13 @@ public:
                       const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, const double &timestamp,
                       cv::Mat &imTraj, const int &nImage);
 
-    cv::Mat TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
+    cv::Mat TrackRGBD(const cv::Mat &im, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imobjpcl, const cv::Mat &flowmap, const cv::Mat &masksem,
                     const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, 
                     const double &timestamp, cv::Mat &imTraj, const int &nImage);
+
+    cv::Mat TrackRGBD_change(const cv::Mat &im, cv::Mat &depthmap, const cv::Mat &flowmap, const cv::Mat &masksem,
+                        const cv::Mat &mTcw_gt, const vector<vector<float> > &vObjPose_gt, const double &timestamp,
+                        cv::Mat &imTraj, const int &nImage);
 
     void SaveResults(const string &filename);
 

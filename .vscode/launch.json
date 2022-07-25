@@ -16,8 +16,8 @@
             "name": "g++ - Build and debug active file", // 配置名称，将会在启动配置的下拉菜单中显示
             "type": "cppdbg",  // 配置类型，这里只能为cppdbg
             "request": "launch",  // 请求配置类型，可以为launch（启动）或attach（附加）
-            "program": "${workspaceFolder}/example/vdo_slam", // 将要进行调试的程序的路径
-            "args": ["${workspaceFolder}/example/kitti-0000-0013.yaml" ,"~/code_data/demo-kitti"], // 程序调试时传递给程序的命令行参数
+            "program": "${workspaceFolder}/example/vdo_slam_change", // 将要进行调试的程序的路径
+            "args": ["${workspaceFolder}/example/kitti-0000-0013.yaml" ,"~/code_data/kitti_tracking/data_tracking_image_2/training/image_02/0003"], // 程序调试时传递给程序的命令行参数
             "stopAtEntry": false,  // 设为true时程序将暂停在程序入口处               
             "cwd": "${workspaceFolder}",  // 调试程序时的工作目录
             "environment": [], // （环境变量）

@@ -47,7 +47,9 @@ Frame::Frame(const Frame &frame)
      mTcw_gt(frame.mTcw_gt), vObjPose_gt(frame.vObjPose_gt), nSemPosi_gt(frame.nSemPosi_gt),
      vObjLabel(frame.vObjLabel), nModLabel(frame.nModLabel), nSemPosition(frame.nSemPosition),
      bObjStat(frame.bObjStat), vObjMod(frame.vObjMod), mvCorres(frame.mvCorres), mvObjCorres(frame.mvObjCorres),
-     mvFlowNext(frame.mvFlowNext), mvObjFlowNext(frame.mvObjFlowNext)
+     mvFlowNext(frame.mvFlowNext), mvObjFlowNext(frame.mvObjFlowNext),
+     // change
+     vObjects(frame.vObjects), mvStatKeyPs(frame.mvStatKeyPs)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++)
@@ -137,7 +139,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
         std::vector<cv::KeyPoint> mvKeysSamp = SampleKeyPoints(imGray.rows, imGray.cols);
         e_1 = clock();
         fea_det_time = (double)(e_1-s_1)/CLOCKS_PER_SEC*1000;
-        std::cout << "feature detection time: " << fea_det_time << std::endl;
+        // std::cout << "feature detection time: " << fea_det_time << std::endl;
 
         for (int i = 0; i < mvKeysSamp.size(); ++i)
         {
@@ -176,7 +178,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
     // cv::waitKey(0);
 
     N_s_tmp = mvCorres.size();
-    // cout << "number of random sample points: " << mvCorres.size() << endl;
+    cout << "number of random sample points: " << mvCorres.size() << endl;
 
     // assign the depth value to each keypoint
     mvStatDepthTmp = vector<float>(N_s_tmp,-1);
@@ -306,7 +308,7 @@ Frame::Frame(const cv::Mat &imGray, cv::Mat &imDepth, cv::Mat &imObjidx, const v
         std::vector<cv::KeyPoint> mvKeysSamp = SampleKeyPointsFromPC(imDepth, depthtmp, imObjPcl[0], imGray.rows, imGray.cols);
         e_1 = clock();
         fea_det_time = (double)(e_1-s_1)/CLOCKS_PER_SEC*1000;
-        std::cout << "feature detection time: " << fea_det_time << std::endl;
+        // std::cout << "feature detection time: " << fea_det_time << std::endl;
 
         mvStatDepthTmp.reserve(depthtmp.size());
         for (int i = 0; i < mvKeysSamp.size(); ++i)
@@ -346,6 +348,7 @@ Frame::Frame(const cv::Mat &imGray, cv::Mat &imDepth, cv::Mat &imObjidx, const v
     // ---------------------------------------------------------------------------------------
 
     N_s_tmp = mvCorres.size();
+    // cout << "number of random sample points: " << mvCorres.size() << endl;
 
     // ---------------------------------------------------------------------------------------
     // ++++++++++++++++++++++++++++ New added for dense object features ++++++++++++++++++++++
@@ -354,7 +357,6 @@ Frame::Frame(const cv::Mat &imGray, cv::Mat &imDepth, cv::Mat &imObjidx, const v
     // semi-dense features on objects
     {
         for(int k=1; k<imObjPcl.size(); ++k){
-            std::cout << k << std::endl;
             pcl::PointCloud<pcl::PointXYZ>::Ptr objPcl = imObjPcl[k];
             cv::Mat X(3, 1, CV_32F);
             cv::Mat X_(3, 1, CV_32F);
@@ -976,6 +978,281 @@ std::vector<cv::KeyPoint> Frame::SampleKeyPointsFromPC(cv::Mat &imDepth, std::ve
         if(delta_num==0)    break;
     }
     return KeySave;
+}
+
+Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlow, const cv::Mat &maskSEM,
+    const double &timeStamp, ORBextractor* extractor, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea, const bool &change)
+    :mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
+     mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth), mThDepthObj(thDepthObj)
+{
+
+    cout << "Start Constructing Frame......" << endl;
+
+    // Frame ID
+    mnId=nNextId++;
+
+    // Scale Level Info
+    mnScaleLevels = mpORBextractorLeft->GetLevels();
+    mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
+    mfLogScaleFactor = log(mfScaleFactor);
+    mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
+    mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
+    mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
+    mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
+
+
+    // ------------------------------------------------------------------------------------------
+    // ++++++++++++++++++++++++++++ New added for background features +++++++++++++++++++++++++++
+    // ------------------------------------------------------------------------------------------
+
+    // clock_t s_1, e_1;
+    // double fea_det_time;
+    // s_1 = clock();
+    // ORB extraction
+    ExtractORB(0,imGray);
+    // e_1 = clock();
+    // fea_det_time = (double)(e_1-s_1)/CLOCKS_PER_SEC*1000;
+    // cout << "feature detection time: " << fea_det_time << endl;
+
+    N = mvKeys.size();
+
+    if(mvKeys.empty())
+        return;
+
+    if (UseSampleFea==0)
+    {
+        // // // Option I: ~~~~~~~ use detected features ~~~~~~~~~~ // // //
+
+        for (int i = 0; i < mvKeys.size(); ++i)
+        {
+            int x = mvKeys[i].pt.x;
+            int y = mvKeys[i].pt.y;
+
+            if (maskSEM.at<int>(y,x)!=0)  // new added in Jun 13 2019
+                continue;
+
+            if (imDepth.at<float>(y,x)>mThDepth || imDepth.at<float>(y,x)<=0)  // new added in Aug 21 2019
+                continue;
+
+            float flow_xe = imFlow.at<cv::Vec2f>(y,x)[0];
+            float flow_ye = imFlow.at<cv::Vec2f>(y,x)[1];
+
+
+            if(flow_xe!=0 && flow_ye!=0)
+            {
+                if(mvKeys[i].pt.x+flow_xe < imGray.cols && mvKeys[i].pt.y+flow_ye < imGray.rows && mvKeys[i].pt.x < imGray.cols && mvKeys[i].pt.y < imGray.rows)
+                {
+                    cv::KeyPoint point = mvKeys[i];
+                    cv::KeyPoint corre(x+flow_xe, y+flow_ye,0,0,0,mvKeys[i].octave,-1);
+                    cv::Point2f flow(flow_xe,flow_ye);
+                    KeyP* key_point = new KeyP(point, corre, flow, -1, -1, false);
+                    mvStatKeyPs.push_back(key_point);
+                }
+            }
+        }
+    }
+    else
+    {
+        // // // Option II: ~~~~~~~ use sampled features ~~~~~~~~~~ // // //
+
+        clock_t s_1, e_1;
+        double fea_det_time;
+        s_1 = clock();
+        std::vector<cv::KeyPoint> mvKeysSamp = SampleKeyPoints(imGray.rows, imGray.cols);
+        e_1 = clock();
+        fea_det_time = (double)(e_1-s_1)/CLOCKS_PER_SEC*1000;
+        // std::cout << "feature detection time: " << fea_det_time << std::endl;
+
+        for (int i = 0; i < mvKeysSamp.size(); ++i)
+        {
+            int x = mvKeysSamp[i].pt.x;
+            int y = mvKeysSamp[i].pt.y;
+
+            if (maskSEM.at<int>(y,x)!=0)  // new added in Jun 13 2019
+                continue;
+
+            if (imDepth.at<float>(y,x)>mThDepth || imDepth.at<float>(y,x)<=0)  // new added in Aug 21 2019
+                continue;
+
+            float flow_xe = imFlow.at<cv::Vec2f>(y,x)[0];
+            float flow_ye = imFlow.at<cv::Vec2f>(y,x)[1];
+
+
+            if(flow_xe!=0 && flow_ye!=0)
+            {
+                if(mvKeysSamp[i].pt.x+flow_xe < imGray.cols && mvKeysSamp[i].pt.y+flow_ye < imGray.rows && mvKeysSamp[i].pt.x+flow_xe>0 && mvKeysSamp[i].pt.y+flow_ye>0)
+                {
+                    cv::KeyPoint point = mvKeysSamp[i];
+                    cv::KeyPoint corre(mvKeysSamp[i].pt.x+flow_xe, mvKeysSamp[i].pt.y+flow_ye,0,0,0,mvKeysSamp[i].octave,-1);
+                    cv::Point2f flow(flow_xe,flow_ye);
+                    KeyP* key_point = new KeyP(point, corre, flow, -1, -1, false);
+                    mvStatKeyPs.push_back(key_point);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+
+    // cv::Mat img_show;
+    // cv::drawKeypoints(imGray, mvKeysSamp, img_show, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+    // cv::imshow("KeyPoints on Background", img_show);
+    // cv::waitKey(0);
+
+    N_s_tmp = mvStatKeyPs.size();
+    cout << "number of random sample points: " << N_s_tmp << endl;
+
+    // assign the depth value to each keypoint
+    for(int i=0; i<N_s_tmp; ++i)
+    {
+        const cv::KeyPoint &kp = mvStatKeyPs[i]->mvKey;
+
+        const float &v = kp.pt.y;
+        const float &u = kp.pt.x;
+
+        float d = imDepth.at<float>(v,u); // be careful with the order  !!!
+
+        if(d>0)
+            mvStatKeyPs[i]->mvDepth = d;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // ++++++++++++++++++++++++++++ New added for dense object features ++++++++++++++++++++++
+    // ---------------------------------------------------------------------------------------
+
+    // semi-dense features on objects
+    int step = 4; // 3
+    for (int i = 0; i < imGray.rows; i=i+step)
+    {
+        for (int j = 0; j < imGray.cols; j=j+step)
+        {
+            // check ground truth motion mask
+            if (maskSEM.at<int>(i,j)!=0 && imDepth.at<float>(i,j)<mThDepthObj && imDepth.at<float>(i,j)>0)
+            {
+                // get flow
+                const float flow_x = imFlow.at<cv::Vec2f>(i,j)[0];
+                const float flow_y = imFlow.at<cv::Vec2f>(i,j)[1];
+
+                if(j+flow_x < imGray.cols && j+flow_x > 0 && i+flow_y < imGray.rows && i+flow_y > 0)
+                {
+                    // save correspondences
+                    cv::KeyPoint point(j,i,0,0,0,-1);
+                    cv::KeyPoint corre(j+flow_x,i+flow_y,0,0,0,-1);
+                    cv::Point2f flow(flow_x,flow_y);
+                    float depth = imDepth.at<float>(i,j);
+                    int label = maskSEM.at<int>(i,j);
+
+                    KeyP* key_point = new KeyP(point, corre, flow, depth, label, true);
+
+                    mvObjFlowNext.push_back(cv::Point2f(flow_x,flow_y));
+                    mvObjCorres.push_back(cv::KeyPoint(j+flow_x,i+flow_y,0,0,0,-1));
+                    // save pixel location
+                    mvObjKeys.push_back(cv::KeyPoint(j,i,0,0,0,-1));
+                    // save depth
+                    mvObjDepth.push_back(imDepth.at<float>(i,j));
+                    // save label
+                    vSemObjLabel.push_back(maskSEM.at<int>(i,j));
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+
+    UndistortKeyPoints();
+
+    ComputeStereoFromRGBD(imDepth);
+
+    // This is done only for the first Frame (or after a change in the calibration)
+    if(mbInitialComputations)
+    {
+        ComputeImageBounds(imGray);
+
+        mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
+        mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
+
+        fx = K.at<float>(0,0);
+        fy = K.at<float>(1,1);
+        cx = K.at<float>(0,2);
+        cy = K.at<float>(1,2);
+        invfx = 1.0f/fx;
+        invfy = 1.0f/fy;
+
+        mbInitialComputations=false;
+    }
+
+    mb = mbf/fx;
+
+    AssignFeaturesToGrid();
+
+    cout << "Constructing Frame, Done!" << endl;
+}
+
+cv::Mat Frame::UnprojectStereoStat_change(const int &i, const bool &addnoise)
+{
+    float z = mvStatKeyPs[i]->mvDepth;
+
+    // used for adding noise
+    cv::RNG rng((unsigned)time(NULL));
+
+    if(addnoise){
+        z = z + rng.gaussian(z*z/(725*0.5)*0.15);  // sigma = z*0.01
+        // z = z + 0.0;
+    }
+
+    if(z>0)
+    {
+        const float u =mvStatKeyPs[i]->mvKey.pt.x;
+        const float v = mvStatKeyPs[i]->mvKey.pt.y;
+        // cout << "xyz: " << u << " " << v << " " << z << endl;
+        const float x = (u-cx)*z*invfx;
+        const float y = (v-cy)*z*invfy;
+        cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);
+
+        // using ground truth
+        const cv::Mat Rlw = mTcw.rowRange(0,3).colRange(0,3);
+        const cv::Mat Rwl = Rlw.t();
+        const cv::Mat tlw = mTcw.rowRange(0,3).col(3);
+        const cv::Mat twl = -Rlw.t()*tlw;
+
+        return Rwl*x3Dc+twl;
+        // return mRwc*x3Dc+mOw;
+    }
+    else
+    {
+        cout << "found a depth value < 0 ..." << endl;
+        return cv::Mat();
+    }
+}
+
+cv::Mat Frame::ObtainFlowDepthCamera_change(const int &i, const bool &addnoise)
+{
+    float z = mvStatKeyPs[i]->mvDepth;
+
+    // used for adding noise
+    cv::RNG rng((unsigned)time(NULL));
+
+    if(addnoise){
+        z = z + rng.gaussian(z*z/(725*0.5)*0.15);  // sigma = z*0.01 or z*z/(725*0.5)*0.12
+        // z = z + 0.0;
+    }
+
+    if(z>0)
+    {
+        const float flow_u = mvStatKeyPs[i]->mvFlow.x;
+        const float flow_v = mvStatKeyPs[i]->mvFlow.y;
+
+        cv::Mat x3Dc = (cv::Mat_<float>(3,1) << flow_u, flow_v, z);
+
+        return x3Dc;
+    }
+    else
+    {
+        cout << "found a depth value < 0 ..." << endl;
+        return cv::Mat();
+    }
 }
 
 } //namespace VDO_SLAM

@@ -10,10 +10,11 @@
 #define MAP_H
 
 #include<opencv2/core/core.hpp>
+#include "KeyP.h"
 
 #include <set>
 
-
+class KeyP;
 namespace VDO_SLAM
 {
 
@@ -36,7 +37,7 @@ public:
     std::vector<std::vector<float> > vfDepSta;                                                                                        // 深度信息
     std::vector<std::vector<cv::Mat> > vp3DPointSta;                                                                        // 恢复的3D点
     // index of temporal matching. (k-1)*n
-    std::vector<std::vector<int> > vnAssoSta;
+    std::vector<std::vector<int> > vnAssoSta;                                                                                       // 保存静态匹配是否为内点，一个vec保存一帧信息
     // feature tracklets: pair.first = frameID; pair.second = featureID;
     std::vector<std::vector<std::pair<int, int> > > TrackletSta;
 
@@ -82,6 +83,8 @@ public:
     std::vector<float> fLBA_time;
     // (0) frame updating (1) camera estimation (2) object tracking (3) object estimation (4) map updating;
     std::vector<std::vector<float> > vfAll_time;
+
+    std::vector<std::vector<KeyP*>> vpFeatStatic;
 
 
     // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
