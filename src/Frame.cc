@@ -1085,7 +1085,7 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
                     cv::KeyPoint point = mvKeysSamp[i];
                     cv::KeyPoint corre(mvKeysSamp[i].pt.x+flow_xe, mvKeysSamp[i].pt.y+flow_ye,0,0,0,mvKeysSamp[i].octave,-1);
                     cv::Point2f flow(flow_xe,flow_ye);
-                    KeyP* key_point = new KeyP(point, corre, flow, -1, -1, false);
+                    KeyP* key_point = new KeyP(point, corre, flow, -1, 0, false);
                     mvStatKeyPs.push_back(key_point);
                 }
             }
@@ -1142,9 +1142,9 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
                     cv::Point2f flow(flow_x,flow_y);
                     float depth = imDepth.at<float>(i,j);
                     int label = maskSEM.at<int>(i,j);
-
                     KeyP* key_point = new KeyP(point, corre, flow, depth, label, true);
 
+                    
                     mvObjFlowNext.push_back(cv::Point2f(flow_x,flow_y));
                     mvObjCorres.push_back(cv::KeyPoint(j+flow_x,i+flow_y,0,0,0,-1));
                     // save pixel location

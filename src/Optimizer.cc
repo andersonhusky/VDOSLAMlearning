@@ -3604,7 +3604,6 @@ void Optimizer::PartialBatchOptimization_change(Map* pMap, const cv::Mat Calib_K
                 g2o::VertexPointXYZ *v_p = new g2o::VertexPointXYZ();
                 v_p->setId(count_unique_id);
                 cv::Mat Xw = pMap->vpFeatStatic[i][j]->mv3DPoint;
-                // cv::Mat Xw = Optimizer::Get3DinWorld(pMap->vpFeatStatic[i][j]->mvKey,pMap->vpFeatStatic[i][j]->mvDepth, Calib_K, pMap->vmCameraPose[i]);
                 v_p->setEstimate(Converter::toVector3d(Xw));
                 optimizer.addVertex(v_p);
 
@@ -3613,9 +3612,6 @@ void Optimizer::PartialBatchOptimization_change(Map* pMap, const cv::Mat Calib_K
                 e->setVertex(0, optimizer.vertex(CurFrameID));
                 e->setVertex(1, optimizer.vertex(count_unique_id));
                 cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatStatic[i][j]->mvKey,pMap->vpFeatStatic[i][j]->mvDepth,Calib_K);
-                
-                // cv::Mat Xw_ = Optimizer::Get3DinWorld(pMap->vpFeatStatic[i][j]->mvKey,pMap->vpFeatStatic[i][j]->mvDepth, Calib_K, pMap->vmCameraPose[i]);
-                // std::cout <<"Xw: " << Xw << ", Xw_: " << Xw_ << ",  Xc: " << Xc << std::endl;
 
                 e->setMeasurement(Converter::toVector3d(Xc));
                 e->information() = Eigen::Matrix3d::Identity()/sigma2_3d_sta;
@@ -4560,7 +4556,7 @@ void Optimizer::PartialBatchOptimization_change(Map* pMap, const cv::Mat Calib_K
 
 void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
 {
-    const int N = pMap->vpFeatSta.size(); // Number of Frames
+    const int N = pMap->vpFeatStatic.size(); // Number of Frames
     std::vector<std::vector<std::pair<int, int> > > StaTracks = pMap->TrackletSta;
     std::vector<std::vector<std::pair<int, int> > > DynTracks = pMap->TrackletDyn;
 
@@ -4589,7 +4585,7 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
     // initialize
     for (int i = 0; i < N; ++i)
     {
-        std::vector<int>  vnFLS_tmp(pMap->vpFeatSta[i].size(),-1);
+        std::vector<int>  vnFLS_tmp(pMap->vpFeatStatic[i].size(),-1);
         vnFeaLabSta[i] = vnFLS_tmp;
         vnFeaMakSta[i] = vnFLS_tmp;
     }
@@ -4745,7 +4741,7 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
                 // (3) save <VERTEX_POINT_3D>
                 g2o::VertexPointXYZ *v_p = new g2o::VertexPointXYZ();
                 v_p->setId(count_unique_id);
-                cv::Mat Xw = pMap->vp3DPointSta[i][j];
+                cv::Mat Xw = pMap->vpFeatStatic[i][j]->mv3DPoint;
                 v_p->setEstimate(Converter::toVector3d(Xw));
                 optimizer.addVertex(v_p);
 
@@ -4753,7 +4749,8 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
                 g2o::EdgeSE3PointXYZ * e = new g2o::EdgeSE3PointXYZ();
                 e->setVertex(0, optimizer.vertex(CurFrameID));
                 e->setVertex(1, optimizer.vertex(count_unique_id));
-                cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatSta[i][j],pMap->vfDepSta[i][j],Calib_K);
+                cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatStatic[i][j]->mvKey,pMap->vpFeatStatic[i][j]->mvDepth,Calib_K);
+                
                 e->setMeasurement(Converter::toVector3d(Xc));
                 e->information() = Eigen::Matrix3d::Identity()/sigma2_3d_sta;
                 if (ROBUST_KERNEL){
@@ -4805,7 +4802,7 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
                     // (3) save <VERTEX_POINT_3D>
                     g2o::VertexPointXYZ *v_p = new g2o::VertexPointXYZ();
                     v_p->setId(count_unique_id);
-                    cv::Mat Xw = pMap->vp3DPointSta[i][j];
+                    cv::Mat Xw = pMap->vpFeatStatic[i][j]->mv3DPoint;
                     v_p->setEstimate(Converter::toVector3d(Xw));
                     // v_p->setFixed(true);
                     optimizer.addVertex(v_p);
@@ -4813,7 +4810,7 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
                     g2o::EdgeSE3PointXYZ * e = new g2o::EdgeSE3PointXYZ();
                     e->setVertex(0, optimizer.vertex(CurFrameID));
                     e->setVertex(1, optimizer.vertex(count_unique_id));
-                    cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatSta[i][j],pMap->vfDepSta[i][j],Calib_K);
+                    cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatStatic[i][j]->mvKey,pMap->vpFeatStatic[i][j]->mvDepth,Calib_K);
                     e->setMeasurement(Converter::toVector3d(Xc));
                     e->information() = Eigen::Matrix3d::Identity()/sigma2_3d_sta;
                     if (ROBUST_KERNEL){
@@ -4837,7 +4834,7 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
                     g2o::EdgeSE3PointXYZ * e = new g2o::EdgeSE3PointXYZ();
                     e->setVertex(0, optimizer.vertex(CurFrameID));
                     e->setVertex(1, optimizer.vertex(FeaMakTmp));
-                    cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatSta[i][j],pMap->vfDepSta[i][j],Calib_K);
+                    cv::Mat Xc = Optimizer::Get3DinCamera(pMap->vpFeatStatic[i][j]->mvKey,pMap->vpFeatStatic[i][j]->mvDepth,Calib_K);
                     e->setMeasurement(Converter::toVector3d(Xc));
                     e->information() = Eigen::Matrix3d::Identity()/sigma2_3d_sta;
                     if (ROBUST_KERNEL){
@@ -5479,7 +5476,7 @@ void Optimizer::FullBatchOptimization_change(Map* pMap, const cv::Mat Calib_K)
                 vPoint->getEstimateData(optimized);
                 Eigen::Matrix<double,3,1> tmp_3d;
                 tmp_3d << optimized[0],optimized[1],optimized[2];
-                pMap->vp3DPointSta[i][j] = Converter::toCvMat(tmp_3d);
+                pMap->vpFeatStatic[i][j]->mv3DPoint = Converter::toCvMat(tmp_3d);
             }
         }
     }

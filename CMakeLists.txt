@@ -73,6 +73,7 @@ src/cvplot/internal.h
 src/yaml_reader.cpp
 src/Obj.cpp
 src/KeyP.cpp
+src/ObjFlow.cpp
 )
 
 target_link_libraries(
