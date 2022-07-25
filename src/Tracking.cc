@@ -5579,7 +5579,7 @@ void Tracking::Track_change()
         if (bGlobalBatch && mTestData==KITTI)
         {
             // Get Full Batch Optimization
-            Optimizer::FullBatchOptimization(mpMap,mK);
+            Optimizer::FullBatchOptimization_change(mpMap,mK);
             // Metric Error AFTER Optimization
             GetMetricError(mpMap->vmCameraPose_RF,mpMap->vmRigidMotion_RF, mpMap->vmObjPosePre,
                            mpMap->vmCameraPose_GT,mpMap->vmRigidMotion_GT, mpMap->vbObjStat);
