@@ -79,6 +79,7 @@ public:
 
     // Sparse Scene Flow Vector
     void GetSceneFlowObj();
+    void GetSceneFlowObj_change();
 
     // Dynamic Object Tracking
     std::vector<std::vector<int> > DynObjTracking();

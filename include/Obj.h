@@ -1,5 +1,6 @@
 /******************
 * @Description：Object类
+            一个obj对象与一个帧对应，表示帧内的一个物体，obj由objflow连接成全局的运动
 * @Author：hongfeng
 * @Date：2022/07/21
 ******************/
@@ -16,18 +17,23 @@ class Frame;
 class Obj{
     public:
         Obj();
+        Obj(const int label);
 
     public:
-        bool mvObjStat;
-        std::vector<cv::Mat> mvObjMod, mvObjMod_gt;                 // object相互运动
-        std::vector<cv::Mat> mvObjPose_gt;                                          // object世界坐标系下的位姿
-        std::vector<cv::Mat> mvObjSpeed, mvObjSpeed_gt;         // 换算的速度，换算公式为论文中对应式子25
-        std::vector<int> mvObjBoxID;                                                       // 在各个帧对应的2D 框真值序号，序号与iniFrameIdx对齐
-        std::vector<cv::Mat> mvObjCentre3D;                                     // 在各个帧对应的质心坐标
-        std::vector<std::vector<KeyP*> > mvKeyPoints;                  // 在各个帧的特征点
-        std::vector<std::vector<KeyP*> > mvKeyPointsInlier;        // 在各个帧的特征点内点
+        std::vector<KeyP*> mvObjKeyPs;
+        std::vector<cv::Point3f> mvFlow_3d;
 
-        int iniFrameIdx;
+        cv::Mat mvObjMod, mvObjMod_gt;
+        cv::Mat mvObjPose_gt;
+        cv::Mat mvObjSpeed, mvObjSpeed_gt;
+        cv::Mat mvObjCentre3D;
+
+        int mvLabel;
+        int mvIdx;
+
+        Frame* mvFrame;
+
+    private:
 };
 
 #endif

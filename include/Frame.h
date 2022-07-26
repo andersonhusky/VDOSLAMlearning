@@ -44,8 +44,8 @@ public:
     Frame(const cv::Mat &imGray, cv::Mat &imDepth, cv::Mat &imObjidx, const vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imObjPcl, const cv::Mat &imFlow, const cv::Mat &maskSEM,
           const double &timeStamp, ORBextractor* extractor, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea);
 
-Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlow, const cv::Mat &maskSEM, const double &timeStamp, ORBextractor* extractor,
-          cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea, const bool &change);
+    Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlow, const cv::Mat &maskSEM, const double &timeStamp, ORBextractor* extractor,
+            cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, const float &thDepthObj, const int &UseSampleFea, const bool &change);
 
     // Extract ORB on the image. 0 for left image and 1 for right image.
     void ExtractORB(int flag, const cv::Mat &im);
@@ -79,6 +79,7 @@ Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlow, cons
     cv::Mat UnprojectStereoStat(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoStat_change(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoObject(const int &i, const bool &addnoise);
+    cv::Mat UnprojectStereoObject_change(const int &i, const int &j, const bool &addnoise);
     cv::Mat UnprojectStereoObjectCamera(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoObjectNoise(const int &i, const cv::Point2f of_error);
     cv::Mat ObtainFlowDepthObject(const int &i, const bool &addnoise);
@@ -244,7 +245,8 @@ public:
 
     static bool mbInitialComputations;
 
-    std::vector<Obj*> vObjects;
+    std::vector<Obj*> mvObjects;
+    std::vector<Obj*> mvObjectsMatch;
     std::vector<KeyP*> mvStatKeyPs;
     std::vector<KeyP*> mvStatKeyPsMatch;
 

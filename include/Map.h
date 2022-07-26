@@ -85,6 +85,7 @@ public:
     std::vector<std::vector<float> > vfAll_time;
 
     std::vector<std::vector<KeyP*>> vpFeatStatic;
+    std::vector<std::vector<Obj*>> vpObjDyna;
 
 
     // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>

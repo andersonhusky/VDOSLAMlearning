@@ -30,7 +30,7 @@ class KeyP{
         cv::Mat mv3DPoint;
 
         // dyna part
-        int mvObjLabel;
+        int mvObjLabel;                             // 存放点对应mask值，或者点云idx
         int mvObjIdx;
 
         Frame* mvFrame;

@@ -1257,8 +1257,6 @@ void Tracking::Track()
         clock_t s_3_1, s_3_2, e_3_1, e_3_2;
         double obj_mot_time = 0, t_con = 0;
 
-        mCurrentFrame.vObjects.resize(ObjIdNew.size());
-
         mCurrentFrame.bObjStat.resize(ObjIdNew.size(),true);
         mCurrentFrame.vObjMod.resize(ObjIdNew.size());
         mCurrentFrame.vObjPosePre.resize(ObjIdNew.size());
@@ -4639,30 +4637,53 @@ cv::Mat Tracking::GrabImageRGBD_change(const cv::Mat &imRGB, cv::Mat &imD, const
         // *** first assign current keypoints and depth to last frame
         // *** then assign last correspondences to current frame
         // 带tmp名的存储当前帧的变量
-        mvTmpObjKeys = mCurrentFrame.mvObjKeys;
-        mvTmpObjDepth = mCurrentFrame.mvObjDepth;
-        mvTmpSemObjLabel = mCurrentFrame.vSemObjLabel;
-        mvTmpObjFlowNext = mCurrentFrame.mvObjFlowNext;
-        mvTmpObjCorres = mCurrentFrame.mvObjCorres;
+        // mvTmpObjKeys = mCurrentFrame.mvObjKeys;
+        // mvTmpObjDepth = mCurrentFrame.mvObjDepth;
+        // mvTmpSemObjLabel = mCurrentFrame.vSemObjLabel;
+        // mvTmpObjFlowNext = mCurrentFrame.mvObjFlowNext;
+        // mvTmpObjCorres = mCurrentFrame.mvObjCorres;
 
-        mCurrentFrame.mvObjKeys = mLastFrame.mvObjCorres;
-        mCurrentFrame.mvObjDepth.resize(mCurrentFrame.mvObjKeys.size(),-1);
-        mCurrentFrame.vSemObjLabel.resize(mCurrentFrame.mvObjKeys.size(),-1);
-        for (int i = 0; i < mCurrentFrame.mvObjKeys.size(); ++i)
-        {
-            const int u = mCurrentFrame.mvObjKeys[i].pt.x;
-            const int v = mCurrentFrame.mvObjKeys[i].pt.y;
-            if (u<(mImGray.cols-1) && u>0 && v<(mImGray.rows-1) && v>0 && imDepth.at<float>(v,u)<mThDepthObj && imDepth.at<float>(v,u)>0)
-            {
-                mCurrentFrame.mvObjDepth[i] = imDepth.at<float>(v,u);
-                mCurrentFrame.vSemObjLabel[i] = maskSEM.at<int>(v,u);
+        int obj_num = mLastFrame.mvObjects.size();
+        mCurrentFrame.mvObjectsMatch = std::vector<Obj*>(obj_num);
+        for(int i=0; i<obj_num; ++i){
+            int obj_pt_num = mLastFrame.mvObjects[i]->mvObjKeyPs.size();
+            std::vector<KeyP*> obj_pts(obj_pt_num);
+            for(int j=0; j<obj_pt_num; ++j){
+                obj_pts[j] = new KeyP();
+                const cv::KeyPoint &kp = mLastFrame.mvObjects[i]->mvObjKeyPs[j]->mvCorre;
+
+                const int v = kp.pt.y;
+                const int u = kp.pt.x;
+                obj_pts[j]->mvKey = kp;
+                if(u<(mImGray.cols-1) && u>0 && v<(mImGray.rows-1) && v>0 && imDepth.at<float>(v,u)<mThDepthObj && imDepth.at<float>(v,u)>0){
+                    obj_pts[j]->mvDepth = imDepth.at<float>(v, u);
+                    obj_pts[j]->mvObjLabel = maskSEM.at<int>(v, u);
+                }
+                else{
+                    obj_pts[j]->mvDepth = 0.1;
+                    obj_pts[j]->mvObjLabel = 0;
+                }
             }
-            else
-            {
-                mCurrentFrame.mvObjDepth[i] = 0.1;
-                mCurrentFrame.vSemObjLabel[i] = 0;
-            }
+            mCurrentFrame.mvObjectsMatch[i]->mvObjKeyPs = obj_pts;
         }
+        // mCurrentFrame.mvObjKeys = mLastFrame.mvObjCorres;
+        // mCurrentFrame.mvObjDepth.resize(mCurrentFrame.mvObjKeys.size(),-1);
+        // mCurrentFrame.vSemObjLabel.resize(mCurrentFrame.mvObjKeys.size(),-1);
+        // for (int i = 0; i < mCurrentFrame.mvObjKeys.size(); ++i)
+        // {
+        //     const int u = mCurrentFrame.mvObjKeys[i].pt.x;
+        //     const int v = mCurrentFrame.mvObjKeys[i].pt.y;
+        //     if (u<(mImGray.cols-1) && u>0 && v<(mImGray.rows-1) && v>0 && imDepth.at<float>(v,u)<mThDepthObj && imDepth.at<float>(v,u)>0)
+        //     {
+        //         mCurrentFrame.mvObjDepth[i] = imDepth.at<float>(v,u);
+        //         mCurrentFrame.vSemObjLabel[i] = maskSEM.at<int>(v,u);
+        //     }
+        //     else
+        //     {
+        //         mCurrentFrame.mvObjDepth[i] = 0.1;
+        //         mCurrentFrame.vSemObjLabel[i] = 0;
+        //     }
+        // }
 
         // **********************************************************
         // // show image
@@ -5052,7 +5073,6 @@ void Tracking::Track_change()
         // cout << "initial pose: " << endl << iniTcw << endl;
         // // compute the pose with new matching
         mCurrentFrame.SetPose(iniTcw);
-        // 这个优化有问题，会污染数据
         if (bJoint)
             Optimizer::PoseOptimizationFlow2Cam_change(&mCurrentFrame, &mLastFrame, TemperalMatch_subset);
         else
@@ -5110,7 +5130,7 @@ void Tracking::Track_change()
         cout << "--------------------------------------------" << endl;
 
         // // ====== compute sparse scene flow to the found matches =======
-        GetSceneFlowObj();
+        GetSceneFlowObj_change();
 
         // // ---------------------------------------------------------------------------------------
         // // ++++++++++++++++++++++++++++++++ Dynamic Object Tracking ++++++++++++++++++++++++++++++
@@ -5127,8 +5147,6 @@ void Tracking::Track_change()
 
         clock_t s_3_1, s_3_2, e_3_1, e_3_2;
         double obj_mot_time = 0, t_con = 0;
-
-        mCurrentFrame.vObjects.resize(ObjIdNew.size());
 
         mCurrentFrame.bObjStat.resize(ObjIdNew.size(),true);
         mCurrentFrame.vObjMod.resize(ObjIdNew.size());
@@ -5604,18 +5622,26 @@ void Tracking::Initialization_change()
             mCurrentFrame.mvStatKeyPs[i]->mv3DPoint = point_3d;
         }
         // dynamic
-        std::vector<cv::Mat> mvObj3DPointTmp;
-        for (int i = 0; i < mCurrentFrame.mvObjKeys.size(); ++i)
+        for(int i=0; i<mCurrentFrame.mvObjects.size(); ++i)
         {
-            mvObj3DPointTmp.push_back(Optimizer::Get3DinCamera(mCurrentFrame.mvObjKeys[i], mCurrentFrame.mvObjDepth[i], mK));
+            std::vector<KeyP*> points = mCurrentFrame.mvObjects[i]->mvObjKeyPs;
+            for(int j=0; j<points.size(); ++j)
+            {
+                cv::Mat point_3d = Optimizer::Get3DinCamera(points[i]->mvKey, points[i]->mvDepth, mK);
+                mCurrentFrame.mvObjects[i]->mvObjKeyPs[j]->mv3DPoint = point_3d;
+            }
         }
-        mCurrentFrame.mvObj3DPoint = mvObj3DPointTmp;
-        // cout << "see the size 1: " << mCurrentFrame.mvStatKeysTmp.size() << " " << mCurrentFrame.mvSift3DPoint.size() << endl;
-        // cout << "see the size 2: " << mCurrentFrame.mvObjKeys.size() << " " << mCurrentFrame.mvObj3DPoint.size() << endl;
+        // std::vector<cv::Mat> mvObj3DPointTmp;
+        // for (int i = 0; i < mCurrentFrame.mvObjKeys.size(); ++i)
+        // {
+        //     mvObj3DPointTmp.push_back(Optimizer::Get3DinCamera(mCurrentFrame.mvObjKeys[i], mCurrentFrame.mvObjDepth[i], mK));
+        // }
+        // mCurrentFrame.mvObj3DPoint = mvObj3DPointTmp;
     }
 
     // (1) save detected static features and corresponding depth
     mpMap->vpFeatStatic.push_back(mCurrentFrame.mvStatKeyPs);
+    mpMap->vpObjDyna.push_back(mCurrentFrame.mvObjects);
     // (2) save detected dynamic object features and corresponding depth
     mpMap->vpFeatDyn.push_back(mCurrentFrame.mvObjKeys);  // modified Nov 19 2019
     mpMap->vfDepDyn.push_back(mCurrentFrame.mvObjDepth);  // modified Nov 19 2019
@@ -6123,6 +6149,317 @@ void Tracking::RenewFrameInfo_change(const std::vector<int> &TM_sta)
 
     // cout << "updating DYNAMIC features finished...... " << mvObjKeysTmp.size() << endl;
     cout << "Renew Frame Info, Done!" << endl;
+}
+
+void Tracking::GetSceneFlowObj_change()
+{
+    const cv::Mat Rcw = mCurrentFrame.mTcw.rowRange(0,3).colRange(0,3);
+    const cv::Mat tcw = mCurrentFrame.mTcw.rowRange(0,3).col(3);
+
+    for(int i=0; i<mCurrentFrame.mvObjects.size(); ++i)
+    {
+        const std::vector<KeyP*> points = mCurrentFrame.mvObjects[i]->mvObjKeyPs;
+        int N = points.size();
+
+        mCurrentFrame.mvObjects[i]->mvFlow_3d.resize(N);
+
+        std::vector<Eigen::Vector3d> pts_p3d(N,Eigen::Vector3d(-1,-1,-1)), pts_vel(N,Eigen::Vector3d(-1,-1,-1));
+
+        for(int j=0; j<N; ++j)
+        {
+            if(mCurrentFrame.mvObjects[i]->mvObjKeyPs[j]->mvObjLabel<=0 || mLastFrame.mvObjects[i]->mvObjKeyPs[j]->mvObjLabel<=0)
+            {
+                mCurrentFrame.mvObjects[i]->mvObjKeyPs[j]->mvObjIdx=-1;
+                continue;
+            }
+            
+            cv::Mat x3D_p = mLastFrame.UnprojectStereoObject_change(i, j, 0);
+            cv::Mat x3D_c = mCurrentFrame.UnprojectStereoObject_change(i, j, 0);
+
+            pts_p3d[j] << x3D_p.at<float>(0), x3D_p.at<float>(1), x3D_p.at<float>(2);
+            cv::Point3f flow3d;
+            flow3d.x = x3D_c.at<float>(0) - x3D_p.at<float>(0);
+            flow3d.y = x3D_c.at<float>(1) - x3D_p.at<float>(1);
+            flow3d.z = x3D_c.at<float>(2) - x3D_p.at<float>(2);
+            pts_vel[j] << flow3d.x, flow3d.y, flow3d.z;
+
+            mCurrentFrame.mvObjects[i]->mvFlow_3d[j] = flow3d;
+        }
+    }
+}
+
+std::vector<std::vector<int> > Tracking::DynObjTracking()
+{
+    clock_t s_2, e_2;
+    double obj_tra_time;
+    s_2 = clock();
+
+    // Find the unique labels in semantic label
+    // label处理：去重
+    auto UniLab = mCurrentFrame.vSemObjLabel;
+    std::sort(UniLab.begin(), UniLab.end());
+    UniLab.erase(std::unique( UniLab.begin(), UniLab.end() ), UniLab.end() );
+
+    cout << "Unique Semantic Label: ";
+    for (int i = 0; i < UniLab.size(); ++i)
+        cout  << UniLab[i] << " ";
+    cout << endl;
+
+    // Collect the predicted labels and semantic labels in vector
+    // 统计各个label的数量，并记录对应的点序号
+    std::vector<std::vector<int> > Posi(UniLab.size());
+    for (int i = 0; i < mCurrentFrame.vSemObjLabel.size(); ++i)
+    {
+        // skip outliers
+        if (mCurrentFrame.vObjLabel[i]==-1)
+            continue;
+
+        // save object label
+        for (int j = 0; j < UniLab.size(); ++j)
+        {
+            if(mCurrentFrame.vSemObjLabel[i]==UniLab[j]){
+                Posi[j].push_back(i);
+                break;
+            }
+        }
+    }
+
+    // // Save objects only from Posi() -> ObjId()
+    // 存放不在边缘的object id及其对应语义标签
+    std::vector<std::vector<int> > ObjId;
+    std::vector<int> sem_posi; // semantic label position for the objects
+    // 图像边缘阈值
+    int shrin_thr_row=0, shrin_thr_col=0;
+    if (mTestData==KITTI)
+    {
+        shrin_thr_row = 25;
+        shrin_thr_col = 50;
+    }
+    // 遍历label，再遍历对应label的特征点
+    for (int i = 0; i < Posi.size(); ++i)
+    {
+        // shrink the image to get rid of object parts on the boundary
+        float count = 0, count_thres=0.5;
+        for (int j = 0; j < Posi[i].size(); ++j)
+        {
+            const float u = mCurrentFrame.mvObjKeys[Posi[i][j]].pt.x;
+            const float v = mCurrentFrame.mvObjKeys[Posi[i][j]].pt.y;
+            // 图像边缘检测
+            if ( v<shrin_thr_row || v>(mImGray.rows-shrin_thr_row) || u<shrin_thr_col || u>(mImGray.cols-shrin_thr_col) )
+                count = count + 1;
+        }
+        // 有效数量阈值检测
+        if (count/Posi[i].size()>count_thres)
+        {
+            // cout << "Most part of this object is on the image boundary......" << endl;
+            for (int k = 0; k < Posi[i].size(); ++k)
+                mCurrentFrame.vObjLabel[Posi[i][k]] = -1;
+            continue;
+        }
+        else
+        {
+            ObjId.push_back(Posi[i]);
+            sem_posi.push_back(UniLab[i]);
+        }
+    }
+
+    // // Check scene flow distribution of each object and keep the dynamic object
+    // 通过检测的点和对应label，obj_dis_tres记录是否通过
+    std::vector<std::vector<int> > ObjIdNew;
+    std::vector<int> SemPosNew, obj_dis_tres(sem_posi.size(),0);
+    // 遍历不在边缘的动态物体，再遍历其内的点
+    for (int i = 0; i < ObjId.size(); ++i)
+    {
+
+        float obj_center_depth = 0,         // object中点的深度累加(用于计算平均深度)
+        sf_min=100,                                         // 场景流最小运动
+        sf_max=0,                                           // 场景流最大运动
+        sf_mean=0,                                          // 场景流平均运动距离
+        sf_count=0;                                         // 运动程度小于阈值的数目
+        std::vector<int> sf_range(10,0);        // 将运动大小分为十个区域
+        for (int j = 0; j < ObjId[i].size(); ++j)
+        {
+            obj_center_depth = obj_center_depth + mCurrentFrame.mvObjDepth[ObjId[i][j]];
+            // const float sf_norm = cv::norm(mCurrentFrame.vFlow_3d[ObjId[i][j]]);
+            // 场景流2范数即距离
+            float sf_norm = std::sqrt(mCurrentFrame.vFlow_3d[ObjId[i][j]].x*mCurrentFrame.vFlow_3d[ObjId[i][j]].x + mCurrentFrame.vFlow_3d[ObjId[i][j]].z*mCurrentFrame.vFlow_3d[ObjId[i][j]].z);
+            if (sf_norm<fSFMgThres)
+                sf_count = sf_count+1;
+            if(sf_norm<sf_min)
+                sf_min = sf_norm;
+            if(sf_norm>sf_max)
+                sf_max = sf_norm;
+            sf_mean = sf_mean + sf_norm;
+            {
+                if (0.0<=sf_norm && sf_norm<0.05)
+                    sf_range[0] = sf_range[0] + 1;
+                else if (0.05<=sf_norm && sf_norm<0.1)
+                    sf_range[1] = sf_range[1] + 1;
+                else if (0.1<=sf_norm && sf_norm<0.2)
+                    sf_range[2] = sf_range[2] + 1;
+                else if (0.2<=sf_norm && sf_norm<0.4)
+                    sf_range[3] = sf_range[3] + 1;
+                else if (0.4<=sf_norm && sf_norm<0.8)
+                    sf_range[4] = sf_range[4] + 1;
+                else if (0.8<=sf_norm && sf_norm<1.6)
+                    sf_range[5] = sf_range[5] + 1;
+                else if (1.6<=sf_norm && sf_norm<3.2)
+                    sf_range[6] = sf_range[6] + 1;
+                else if (3.2<=sf_norm && sf_norm<6.4)
+                    sf_range[7] = sf_range[7] + 1;
+                else if (6.4<=sf_norm && sf_norm<12.8)
+                    sf_range[8] = sf_range[8] + 1;
+                else if (12.8<=sf_norm && sf_norm<25.6)
+                    sf_range[9] = sf_range[9] + 1;
+            }
+        }
+
+        // cout << "scene flow distribution:"  << endl;
+        // for (int j = 0; j < sf_range.size(); ++j)
+        //     cout << sf_range[j] << " ";
+        // cout << endl;
+
+        // 运动较小点所占比例阈值检测，未通过的被标记为静态
+        if (sf_count/ObjId[i].size()>fSFDsThres)
+        {
+            // label this object as static background
+            for (int k = 0; k < ObjId[i].size(); ++k)
+                mCurrentFrame.vObjLabel[ObjId[i][k]] = 0;
+            continue;
+        }
+        // 平均深度检测+数量检测（大小检测）
+        // important part
+        else if (obj_center_depth/ObjId[i].size()>mThDepthObj || ObjId[i].size()<150)
+        {
+            obj_dis_tres[i]=-1;
+            std::cout << "object " << sem_posi[i] <<" is too far away or too small! " << obj_center_depth/ObjId[i].size() << std::endl;
+            // label this object as far away object
+            for (int k = 0; k < ObjId[i].size(); ++k)
+                mCurrentFrame.vObjLabel[ObjId[i][k]] = -1;
+            continue;
+        }
+        else
+        {
+            // cout << "get new objects!" << endl;
+            ObjIdNew.push_back(ObjId[i]);
+            SemPosNew.push_back(sem_posi[i]);
+        }
+    }
+
+    // add ground truth tracks
+    std::vector<int> nSemPosi_gt_tmp = mCurrentFrame.nSemPosi_gt;
+    for (int i = 0; i < sem_posi.size(); ++i)
+    {
+        for (int j = 0; j < nSemPosi_gt_tmp.size(); ++j)
+        {
+            if (sem_posi[i]==nSemPosi_gt_tmp[j] && obj_dis_tres[i]==-1)
+            {
+                nSemPosi_gt_tmp[j]=-1;
+            }
+        }
+    }
+
+    mpMap->vnSMLabelGT.push_back(nSemPosi_gt_tmp);
+
+
+    // // *** show the points on object ***
+    // for (int i = 0; i < ObjIdNew.size(); ++i)
+    // {
+    //     // **** show the picked points ****
+    //     std::vector<cv::KeyPoint> PickKeys;
+    //     for (int j = 0; j < ObjIdNew[i].size(); ++j){
+    //         PickKeys.push_back(mCurrentFrame.mvObjKeys[ObjIdNew[i][j]]);
+    //     }
+    //     cv::drawKeypoints(mImGray, PickKeys, mImGray, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
+    //     cv::imshow("KeyPoints and Grid on Background", mImGray);
+    //     cv::waitKey(0);
+    // }
+
+    // Relabel the objects that associate with the objects in last frame
+
+    // initialize global object id
+    // 初始情况，max_id表示当前的object序号
+    if (f_id==1)
+        max_id = 1;
+
+    // save current label id
+    // 存储当前帧的object序号
+    std::vector<int> LabId(ObjIdNew.size());
+    // 遍历当前帧的object，再遍历其特征点
+    for (int i = 0; i < ObjIdNew.size(); ++i)
+    {
+        // save semantic labels in last frame
+        // 保存上一帧的label
+        std::vector<int> Lb_last;
+        for (int k = 0; k < ObjIdNew[i].size(); ++k)
+            Lb_last.push_back(mLastFrame.vSemObjLabel[ObjIdNew[i][k]]);
+
+        // find label that appears most in Lb_last()
+        // 对上一帧label计数并排序
+        // (1) count duplicates
+        std::map<int, int> dups;
+        for(int k : Lb_last)
+            ++dups[k];
+        // (2) and sort them by descending order
+        std::vector<std::pair<int, int> > sorted;
+        for (auto k : dups)
+            sorted.push_back(std::make_pair(k.first,k.second));
+        std::sort(sorted.begin(), sorted.end(), SortPairInt);
+
+        // label the object in current frame
+        int New_lab = sorted[0].first;
+        // cout << " what is in the new label: " << New_lab << endl;
+        // 初始情况，ObjIdNew中每个元素都创建为新的object
+        if (max_id==1)
+        {
+            LabId[i] = max_id;
+            for (int k = 0; k < ObjIdNew[i].size(); ++k)
+                mCurrentFrame.vObjLabel[ObjIdNew[i][k]] = max_id;
+            max_id = max_id + 1;
+        }
+        else
+        {
+            bool exist = false;
+            // 同上一帧匹配度最高的构成连接
+            for (int k = 0; k < mLastFrame.nSemPosition.size(); ++k)
+            {
+                if (mLastFrame.nSemPosition[k]==New_lab && mLastFrame.bObjStat[k])
+                {
+                    LabId[i] = mLastFrame.nModLabel[k];
+                    for (int k = 0; k < ObjIdNew[i].size(); ++k)
+                        mCurrentFrame.vObjLabel[ObjIdNew[i][k]] = LabId[i];
+                    exist = true;
+                    break;
+                }
+            }
+            // 没找到匹配时新建object
+            if (exist==false)
+            {
+                std::cout << "create a new object!" << std::endl;
+                LabId[i] = max_id;
+                for (int k = 0; k < ObjIdNew[i].size(); ++k)
+                    mCurrentFrame.vObjLabel[ObjIdNew[i][k]] = max_id;
+                max_id = max_id + 1;
+            }
+        }
+
+    }
+
+    // // assign the model label in current frame
+    mCurrentFrame.nModLabel = LabId;
+    mCurrentFrame.nSemPosition = SemPosNew;
+
+    e_2 = clock();
+    obj_tra_time = (double)(e_2-s_2)/CLOCKS_PER_SEC*1000;
+    all_timing[2] = obj_tra_time;
+    // cout << "dynamic object tracking time: " << obj_tra_time << endl;
+
+    cout << "Current Max_id: ("<< max_id << ") motion label: ";
+    for (int i = 0; i < LabId.size(); ++i)
+        cout <<  LabId[i] << " ";
+
+
+    return ObjIdNew;
 }
 
 } //namespace VDO_SLAM

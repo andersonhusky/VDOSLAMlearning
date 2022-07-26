@@ -49,7 +49,7 @@ Frame::Frame(const Frame &frame)
      bObjStat(frame.bObjStat), vObjMod(frame.vObjMod), mvCorres(frame.mvCorres), mvObjCorres(frame.mvObjCorres),
      mvFlowNext(frame.mvFlowNext), mvObjFlowNext(frame.mvObjFlowNext),
      // change
-     vObjects(frame.vObjects), mvStatKeyPs(frame.mvStatKeyPs)
+     mvObjects(frame.mvObjects), mvStatKeyPs(frame.mvStatKeyPs)
 {
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++)
@@ -1144,15 +1144,31 @@ Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const cv::Mat &imFlo
                     int label = maskSEM.at<int>(i,j);
                     KeyP* key_point = new KeyP(point, corre, flow, depth, label, true);
 
-                    
-                    mvObjFlowNext.push_back(cv::Point2f(flow_x,flow_y));
-                    mvObjCorres.push_back(cv::KeyPoint(j+flow_x,i+flow_y,0,0,0,-1));
-                    // save pixel location
-                    mvObjKeys.push_back(cv::KeyPoint(j,i,0,0,0,-1));
-                    // save depth
-                    mvObjDepth.push_back(imDepth.at<float>(i,j));
-                    // save label
-                    vSemObjLabel.push_back(maskSEM.at<int>(i,j));
+                    int idx=0;
+                    while(idx < mvObjects.size()){
+                        if(mvObjects[idx]->mvLabel==label){
+                            break;
+                        }
+                        ++idx;
+                    }
+                    // create a new obj
+                    if(idx==mvObjects.size()){
+                        Obj* new_obj = new Obj(label);
+                        new_obj->mvObjKeyPs.push_back(key_point);
+                        mvObjects.push_back(new_obj);
+                    }
+                    else{
+                        mvObjects[idx]->mvObjKeyPs.push_back(key_point);
+                    }
+
+                    // mvObjFlowNext.push_back(cv::Point2f(flow_x,flow_y));
+                    // mvObjCorres.push_back(cv::KeyPoint(j+flow_x,i+flow_y,0,0,0,-1));
+                    // // save pixel location
+                    // mvObjKeys.push_back(cv::KeyPoint(j,i,0,0,0,-1));
+                    // // save depth
+                    // mvObjDepth.push_back(imDepth.at<float>(i,j));
+                    // // save label
+                    // vSemObjLabel.push_back(maskSEM.at<int>(i,j));
                 }
             }
         }
@@ -1250,6 +1266,42 @@ cv::Mat Frame::ObtainFlowDepthCamera_change(const int &i, const bool &addnoise)
     }
     else
     {
+        cout << "found a depth value < 0 ..." << endl;
+        return cv::Mat();
+    }
+}
+
+cv::Mat Frame::UnprojectStereoObject_change(const int &i, const int &j, const bool &addnoise)
+{
+    float z = mvObjects[i]->mvObjKeyPs[j]->mvDepth;
+
+    // used for adding noise
+    cv::RNG rng((unsigned)time(NULL));
+
+    if(addnoise){
+        float noise = rng.gaussian(z*z/(725*0.5)*0.15);
+        z = z + noise;  // sigma = z*0.01
+        // z = z + 0.0;
+        // cout << "noise: " << noise << endl;
+    }
+
+    if(z>0)
+    {
+        const float u = mvObjects[i]->mvObjKeyPs[j]->mvKey.pt.x;
+        const float v = mvObjects[i]->mvObjKeyPs[j]->mvKey.pt.y;
+        const float x = (u-cx)*z*invfx;
+        const float y = (v-cy)*z*invfy;
+        cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);
+
+        // using ground truth
+        const cv::Mat Rlw = mTcw.rowRange(0,3).colRange(0,3);
+        const cv::Mat Rwl = Rlw.t();
+        const cv::Mat tlw = mTcw.rowRange(0,3).col(3);
+        const cv::Mat twl = -Rlw.t()*tlw;
+
+        return Rwl*x3Dc+twl;
+    }
+    else{
         cout << "found a depth value < 0 ..." << endl;
         return cv::Mat();
     }
