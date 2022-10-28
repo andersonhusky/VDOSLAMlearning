@@ -65,6 +65,8 @@
         "stop_token": "cpp",
         "csignal": "cpp",
         "numbers": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "cfenv": "cpp",
+        "typeindex": "cpp"
     }
 }

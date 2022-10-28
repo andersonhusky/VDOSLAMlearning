@@ -93,13 +93,13 @@ ${PCL_LIBRARIES}
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/example)
 
-add_executable(vdo_slam
-example/vdo_slam.cc)
-target_link_libraries(vdo_slam ${PROJECT_NAME})
+# add_executable(vdo_slam
+# example/vdo_slam.cc)
+# target_link_libraries(vdo_slam ${PROJECT_NAME})
 
-# add_executable(vdo_slam_change
-# example/vdo_slam_change.cc)
-# target_link_libraries(vdo_slam_change ${PROJECT_NAME})
+add_executable(vdo_slam_change
+example/vdo_slam_change.cc)
+target_link_libraries(vdo_slam_change ${PROJECT_NAME})
 
 # add_executable(test
 # example/test.cpp)

@@ -79,7 +79,8 @@ public:
     cv::Mat UnprojectStereoStat(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoStat_change(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoObject(const int &i, const bool &addnoise);
-    cv::Mat UnprojectStereoObject_change(const int &i, const int &j, const bool &addnoise);
+    cv::Mat UnprojectStereoObject_change(const cv::Point2d &match, const bool &addnoise);
+    cv::Mat UnprojectStereoObjectMatch_change(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoObjectCamera(const int &i, const bool &addnoise);
     cv::Mat UnprojectStereoObjectNoise(const int &i, const cv::Point2f of_error);
     cv::Mat ObtainFlowDepthObject(const int &i, const bool &addnoise);
@@ -249,6 +250,9 @@ public:
     std::vector<Obj*> mvObjectsMatch;
     std::vector<KeyP*> mvStatKeyPs;
     std::vector<KeyP*> mvStatKeyPsMatch;
+    std::vector<KeyP*> mvObjKeyPsMatch;
+
+    int GetObjKeyPsNum();
 
 private:
 

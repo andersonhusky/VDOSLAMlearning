@@ -38,8 +38,8 @@ void LoadData(const string & strPathToSequence, vector<string> &vstrFilenamesRGB
 void LoadObjPcd(const string &strPathObjPcd, vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &imObjPcl, const test_input::YamlReader &yaml_reader);
 void LoadMask(const string &strFilenamesMask, cv::Mat &imMask);
 
-int main(int arg, char **argv){
-    if(arg != 3){
+int main(int argc, char **argv){
+    if(argc != 3){
         cerr << endl << "Usage: rosrun Lidar2Depth VDO pah_to_settings path_to_sequence" << endl;
         return 1;
     }
@@ -149,7 +149,7 @@ int main(int arg, char **argv){
     }
 }
 
-void LoadData(const string & strPathToSequence, vector<string> &vstrFilenamesRGB, vector<string> &vstrFilenamesDEP,
+void LoadData(const string & strPathToSequence, vector<string> &vstrFilenamesRGBg, vector<string> &vstrFilenamesDEP,
             vector<string> &vstrFilenamesOBJPCD, vector<string> &vstrFilenamesSEM, vector<string> &vstrFilenamesFLO, 
             vector<double> &vTimestamps, vector<cv::Mat> &vPoseGT, vector<vector<float> > &vObjPoseGT){
     ifstream fTimes;

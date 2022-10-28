@@ -1271,8 +1271,10 @@ cv::Mat Frame::ObtainFlowDepthCamera_change(const int &i, const bool &addnoise)
     }
 }
 
-cv::Mat Frame::UnprojectStereoObject_change(const int &i, const int &j, const bool &addnoise)
+cv::Mat Frame::UnprojectStereoObject_change(const cv::Point2d &match, const bool &addnoise)
 {
+    int i = match.x;
+    int j = match.y;
     float z = mvObjects[i]->mvObjKeyPs[j]->mvDepth;
 
     // used for adding noise
@@ -1305,6 +1307,50 @@ cv::Mat Frame::UnprojectStereoObject_change(const int &i, const int &j, const bo
         cout << "found a depth value < 0 ..." << endl;
         return cv::Mat();
     }
+}
+
+cv::Mat Frame::UnprojectStereoObjectMatch_change(const int &i, const bool &addnoise)
+{
+    float z = mvObjKeyPsMatch[i]->mvDepth;
+
+    // used for adding noise
+    cv::RNG rng((unsigned)time(NULL));
+
+    if(addnoise){
+        float noise = rng.gaussian(z*z/(725*0.5)*0.15);
+        z = z + noise;  // sigma = z*0.01
+        // z = z + 0.0;
+        // cout << "noise: " << noise << endl;
+    }
+
+    if(z>0)
+    {
+        const float u = mvObjKeyPsMatch[i]->mvKey.pt.x;
+        const float v = mvObjKeyPsMatch[i]->mvKey.pt.y;
+        const float x = (u-cx)*z*invfx;
+        const float y = (v-cy)*z*invfy;
+        cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);
+
+        // using ground truth
+        const cv::Mat Rlw = mTcw.rowRange(0,3).colRange(0,3);
+        const cv::Mat Rwl = Rlw.t();
+        const cv::Mat tlw = mTcw.rowRange(0,3).col(3);
+        const cv::Mat twl = -Rlw.t()*tlw;
+
+        return Rwl*x3Dc+twl;
+    }
+    else{
+        cout << "found a depth value < 0 ..." << endl;
+        return cv::Mat();
+    }
+}
+
+int Frame::GetObjKeyPsNum(){
+    int result=0;
+    for(auto obj: mvObjects){
+        result += obj->mvObjKeyPs.size();
+    }
+    return result;
 }
 
 } //namespace VDO_SLAM

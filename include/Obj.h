@@ -18,15 +18,21 @@ class Obj{
     public:
         Obj();
         Obj(const int label);
+        Obj(const int label, const int idx);
 
     public:
+        bool mvObjStat;
         std::vector<KeyP*> mvObjKeyPs;
-        std::vector<cv::Point3f> mvFlow_3d;
 
         cv::Mat mvObjMod, mvObjMod_gt;
-        cv::Mat mvObjPose_gt;
-        cv::Mat mvObjSpeed, mvObjSpeed_gt;
+        cv::Mat mvObjPosePre, mvObjPose_gt;
+
+        float mvObjSpeed_gt;
+        cv::Point2f mvObjSpeed;
+
         cv::Mat mvObjCentre3D;
+        int mvObjBoxID;
+        std::vector<int> mvObjInlierID;
 
         int mvLabel;
         int mvIdx;

@@ -32,6 +32,8 @@ class KeyP{
         // dyna part
         int mvObjLabel;                             // 存放点对应mask值，或者点云idx
         int mvObjIdx;
+        cv::Point3f mvFlow_3d;              // 3D场景流
+        cv::Point2d mvFrom_2d;          // 对应上一帧第几个object的第几个point
 
         Frame* mvFrame;
         Obj* mvObj;

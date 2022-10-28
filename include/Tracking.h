@@ -83,6 +83,7 @@ public:
 
     // Dynamic Object Tracking
     std::vector<std::vector<int> > DynObjTracking();
+    std::vector<std::vector<int> > DynObjTracking_change();
 
     // For flow display on 2d plane
     void DrawLine(cv::KeyPoint &keys, cv::Point2f &flow, cv::Mat &ref_image, const cv::Scalar &color,

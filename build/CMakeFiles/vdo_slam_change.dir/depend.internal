@@ -3,8 +3,10 @@
 
 CMakeFiles/vdo_slam_change.dir/example/vdo_slam_change.cc.o
  ../include/Frame.h
+ ../include/KeyP.h
  ../include/Map.h
  ../include/ORBextractor.h
+ ../include/Obj.h
  ../include/System.h
  ../include/Tracking.h
  ../include/yaml_reader.hpp
